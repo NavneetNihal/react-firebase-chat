@@ -3,12 +3,15 @@ import { toast } from "react-toastify";
 import "./login.css"
 import { account, databases, appwriteConfig } from "../../lib/appwrite";
 import { ID } from "appwrite";
+import upload from "../../lib/upload";
 
 const Login = () => {
     const [avatar, setAvatar] = useState({
         file: null,
         url: ""
     })
+
+    const [loading, setLoading] = useState(false)
 
     const handleAvatar = e => {
         if (e.target.files[0]) {
@@ -21,6 +24,7 @@ const Login = () => {
 
     const handleRegister = async (e) => {
         e.preventDefault()
+        setLoading(true);
         const formData = new FormData(e.target);
 
         const { username, email, password } = Object.fromEntries(formData);
@@ -37,7 +41,13 @@ const Login = () => {
             }
             await account.createEmailPasswordSession(email, password);
 
-            // 3. Save the user's profile to the Appwrite Database
+            // 3. Upload Avatar to Storage (if the user selected one)
+            let imgUrl = "";
+            if (avatar.file) {
+                imgUrl = await upload(avatar.file);
+            }
+
+            // 4. Save the user's profile to the Appwrite Database
             await databases.createDocument(
                 appwriteConfig.databaseId,
                 appwriteConfig.usersCollectionId,
@@ -46,7 +56,8 @@ const Login = () => {
                     username: username,
                     email: email,
                     id: res.$id,
-                    blocked: []
+                    blocked: [],
+                    avatar: imgUrl
                 });
 
             await databases.createDocument(
@@ -62,21 +73,31 @@ const Login = () => {
         } catch (error) {
             console.log(error);
             toast.error(error.message)
+        } finally {
+            setLoading(false);
         }
     }
 
     
     const handleLogin = async (e) => {
         e.preventDefault();
+        setLoading(true);
         const formData = new FormData(e.target);
         const { email, password } = Object.fromEntries(formData);
 
         try {
+            // Clear any stuck sessions before trying to log in
+            try {
+                await account.deleteSession("current");
+            } catch (err) {
+            }
             await account.createEmailPasswordSession(email, password);
             toast.success("Logged in successfully!");
         } catch (error) {
             console.log(error);
             toast.error(error.message);
+        } finally {
+            setLoading(false);
         }
     }
 
@@ -87,7 +108,7 @@ const Login = () => {
             <form onSubmit={handleLogin}>
                 <input type="email" placeholder="Email" name="email" />
                 <input type="password" placeholder="Password" name="password" />
-                <button>Sign in</button>
+                <button disabled={loading}>{loading ? "Loading..." : "Sign in"}</button>
             </form>
         </div>
         <div className="separator"></div>
@@ -101,7 +122,7 @@ const Login = () => {
                 <input type="text" placeholder="Username" name="username" />
                 <input type="email" placeholder="Email" name="email" />
                 <input type="password" placeholder="Password" name="password" />
-                <button>Sign up</button>
+                <button disabled={loading}>{loading ? "Loading..." : "Sign up"}</button>
             </form>
         </div>
     </div>
