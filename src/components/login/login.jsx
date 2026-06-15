@@ -4,6 +4,7 @@ import "./login.css"
 import { account, databases, appwriteConfig } from "../../lib/appwrite";
 import { ID } from "appwrite";
 import upload from "../../lib/upload";
+import useUserStore from "../../lib/userStore";
 
 const Login = () => {
     const [avatar, setAvatar] = useState({
@@ -12,6 +13,7 @@ const Login = () => {
     })
 
     const [loading, setLoading] = useState(false)
+    const { fetchUserInfo } = useUserStore()
 
     const handleAvatar = e => {
         if (e.target.files[0]) {
@@ -57,7 +59,7 @@ const Login = () => {
                     email: email,
                     id: res.$id,
                     blocked: [],
-                    avatar: imgUrl
+                    avatar: imgUrl || null
                 });
 
             await databases.createDocument(
@@ -69,7 +71,9 @@ const Login = () => {
                    id: res.$id,
                 });
 
-            toast.success("Account created successfully! You can Login Now");
+            // Trigger the global state to update so App.jsx switches to Chat!
+            await fetchUserInfo(res.$id);
+            toast.success("Account created successfully!");
         } catch (error) {
             console.log(error);
             toast.error(error.message)
@@ -92,6 +96,11 @@ const Login = () => {
             } catch (err) {
             }
             await account.createEmailPasswordSession(email, password);
+            
+            // Get the current user to find their ID, then update the global store!
+            const currentAccount = await account.get();
+            await fetchUserInfo(currentAccount.$id);
+            
             toast.success("Logged in successfully!");
         } catch (error) {
             console.log(error);
