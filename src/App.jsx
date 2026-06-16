@@ -10,6 +10,8 @@ import useUserStore from "./lib/userStore";
 const App = () => {
 
   const { currentUser, isLoading, fetchUserInfo } = useUserStore();
+  
+  console.log("Current User Object:", currentUser);
 
   useEffect(() => {
     const checkUser = async () => {

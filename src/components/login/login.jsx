@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "react-toastify";
 import "./login.css"
 import { account, databases, appwriteConfig } from "../../lib/appwrite";
-import { ID } from "appwrite";
+import { ID, Permission, Role } from "appwrite";
 import upload from "../../lib/upload";
 import useUserStore from "../../lib/userStore";
 
@@ -32,34 +32,35 @@ const Login = () => {
         const { username, email, password } = Object.fromEntries(formData);
        
         try {
-            // 1. Create the user in Appwrite Auth
             const res = await account.create(ID.unique(), email, password, username);
             console.log("User created successfully:", res);
 
-            // 2. Clear old sessions and log the new user in
             try {
                 await account.deleteSession("current");
             } catch (err) {
             }
             await account.createEmailPasswordSession(email, password);
 
-            // 3. Upload Avatar to Storage (if the user selected one)
             let imgUrl = "";
             if (avatar.file) {
-                imgUrl = await upload(avatar.file);
+                const permissions = [
+                    Permission.read(Role.any()),
+                    Permission.update(Role.user(res.$id)),
+                    Permission.delete(Role.user(res.$id))
+                ];
+                imgUrl = await upload(avatar.file, permissions);
             }
 
-            // 4. Save the user's profile to the Appwrite Database
             await databases.createDocument(
                 appwriteConfig.databaseId,
                 appwriteConfig.usersCollectionId,
-                res.$id, // Using the Auth ID as the Document ID
+                res.$id, 
                 {
                     username: username,
                     email: email,
                     id: res.$id,
                     blocked: [],
-                    avatar: imgUrl || null
+                    avatar: imgUrl
                 });
 
             await databases.createDocument(
@@ -71,7 +72,6 @@ const Login = () => {
                    id: res.$id,
                 });
 
-            // Trigger the global state to update so App.jsx switches to Chat!
             await fetchUserInfo(res.$id);
             toast.success("Account created successfully!");
         } catch (error) {

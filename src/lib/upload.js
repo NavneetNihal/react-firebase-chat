@@ -1,12 +1,13 @@
 import { storage, appwriteConfig } from "./appwrite";
 import { ID } from "appwrite";
 
-const upload = async (file) => {
+const upload = async (file, permissions = []) => {
     try {
         const uploadedFile = await storage.createFile(
             appwriteConfig.bucketId,
             ID.unique(),
-            file
+            file,
+            permissions
         );
 
         // Get the URL to view the image
