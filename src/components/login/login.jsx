@@ -28,8 +28,16 @@ const Login = () => {
         e.preventDefault()
         setLoading(true);
         const formData = new FormData(e.target);
-
         const { username, email, password } = Object.fromEntries(formData);
+
+        if (!username || !email || !password) {
+            toast.warn("Please enter inputs!");
+            return setLoading(false);
+        }
+        if (!avatar.file) {
+            toast.warn("Please upload an avatar!");
+            return setLoading(false);
+        }
        
         try {
             const res = await account.create(ID.unique(), email, password, username);
