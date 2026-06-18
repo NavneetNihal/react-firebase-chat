@@ -143,7 +143,7 @@ const AddUser = () => {
             <span>{user.username}</span>
           </div>
           <button onClick={handleAdd} disabled={isAdding}>
-            {isAdding ? "Adding..." : "Add User"}
+            {isAdding ? <div className="loader"></div> : "Add User"}
           </button>
         </div>
       )}
