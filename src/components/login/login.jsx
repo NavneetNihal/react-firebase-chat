@@ -125,7 +125,7 @@ const Login = () => {
             <form onSubmit={handleLogin}>
                 <input type="email" placeholder="Email" name="email" />
                 <input type="password" placeholder="Password" name="password" />
-                <button disabled={loading}>{loading ? "Loading..." : "Sign in"}</button>
+                <button disabled={loading}>{loading ? <div className="loader"></div> : "Sign in"}</button>
             </form>
         </div>
         <div className="separator"></div>
@@ -139,7 +139,7 @@ const Login = () => {
                 <input type="text" placeholder="Username" name="username" />
                 <input type="email" placeholder="Email" name="email" />
                 <input type="password" placeholder="Password" name="password" />
-                <button disabled={loading}>{loading ? "Loading..." : "Sign up"}</button>
+                <button disabled={loading}>{loading ? <div className="loader"></div> : "Sign up"}</button>
             </form>
         </div>
     </div>

@@ -3,7 +3,7 @@ import { account } from "./lib/appwrite";
 import Chat from "./components/chat/Chat";
 import Detail from "./components/detail/Detail";
 import List from "./components/list/List";
-import Login from "./components/login/login"
+import Login from "./components/login/Login"
 import Notification from "./components/notification/Notification";
 import useUserStore from "./lib/userStore";
 
@@ -25,7 +25,7 @@ const App = () => {
     checkUser();
   }, [fetchUserInfo]);
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading"></div>;
 
   return (
     <div className='container'>
