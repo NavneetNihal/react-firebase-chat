@@ -4,7 +4,7 @@ import { databases, appwriteConfig } from "../../../../lib/appwrite";
 import { Query, ID } from "appwrite";
 import useUserStore from "../../../../lib/userStore";
 
-const AddUser = () => {
+const AddUser = ({ setAddMode }) => {
   const [user, setUser] = useState(null);
   const [isAdding, setIsAdding] = useState(false);
   const { currentUser } = useUserStore();
@@ -123,6 +123,7 @@ const AddUser = () => {
       // Success! Clear the search result and reset the button.
       console.log("Chat successfully created!");
       setUser(null);
+      setAddMode(false);
     } catch (error) {
       console.log(error);
     } finally {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import useUserStore from "../../../lib/userStore";
 import { databases, client, appwriteConfig } from "../../../lib/appwrite"; 
 import "./chatList.css";
-import AddUser from "./addUser/addUser";
+import AddUser from "./addUser/AddUser";
 
 const ChatList = () => {
   const [chats, setChats] = useState([]);
@@ -101,7 +101,7 @@ const ChatList = () => {
         </div>
       ))}
       
-      { addMode && <AddUser />}
+      { addMode && <AddUser setAddMode={setAddMode} />}
     </div>
   );
 };
