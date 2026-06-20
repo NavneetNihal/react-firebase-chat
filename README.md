@@ -26,25 +26,25 @@ An elegant, real-time chat application built with **React**, **Vite**, and **App
 
 During development, we conquered several major architectural challenges and Appwrite-specific constraints:
 
-### 1. The Appwrite Array Serialization Constraint
+### 1. Single-Bucket Zero-Trust File Security (RBAC)
+**Pain Point:** Appwrite's free tier only allows one storage bucket, but the app needs to store both public avatars and strictly private chat images with completely different security rules.
+**Solution:** Instead of managing multiple buckets, we implemented Role-Based Access Control (RBAC) at the file level during the exact moment of upload. The `upload.js` engine dynamically injects custom read/write permissions directly into the file payload. This ensures that even if a private chat image URL is leaked, the Appwrite backend will mechanically block any unauthorized user from viewing it.
+
+### 2. The Appwrite Array Serialization Constraint
 **Pain Point:** Appwrite's database does not support natively nesting complex JSON objects inside array fields (which we needed for `userchats` and `messages`).
 **Solution:** We built a custom JSON serialization engine. Before uploading, the engine runs `JSON.stringify()` on every message object, converting it to a raw string. When downloading, the UI radar automatically runs `JSON.parse()` to re-inflate the strings back into usable JavaScript objects.
 
-### 2. The Double-Loop Sidebar Sync
+### 3. The Double-Loop Sidebar Sync
 **Pain Point:** When a message is sent, the engine must update the left sidebar (`userchats`) for *both* the sender and the receiver, without causing database collisions.
 **Solution:** We implemented a strict sequential `for...of` loop in `Chat.jsx`. It individually fetches the sender's sidebar, updates the preview text, uploads it, and *then* fetches the receiver's sidebar, flags it with an `isSeen: false` (Blue Dot), and uploads it. This guarantees zero data corruption.
 
-### 3. The `getFileView` Storage Bug
+### 4. The `getFileView` Storage Bug
 **Pain Point:** Appwrite's `getFileView` API returned a complex URL object instead of a raw string, which corrupted the database payload.
 **Solution:** We intercepted the storage pipeline in `upload.js` and forcefully appended `.toString()` to the `getFileView` result, ensuring the database only receives clean, permanent Cloud URLs.
 
-### 4. Zero-Refresh Blocking System
+### 5. Zero-Refresh Blocking System
 **Pain Point:** Blocking a user traditionally required a full page refresh to properly re-sync the UI with the database.
 **Solution:** We built a mechanical blocking engine in `Detail.jsx`. It uses high-speed array `.filter()` logic to block/unblock, fires the new array to the Appwrite database, and instantly overwrites the local `currentUser` memory vault using Zustand. This triggers an immediate React re-render, flipping the UI instantly without touching the network again.
-
-### 5. Single-Bucket Zero-Trust File Security (RBAC)
-**Pain Point:** Appwrite's free tier only allows one storage bucket, but the app needs to store both public avatars and strictly private chat images with completely different security rules.
-**Solution:** Instead of managing multiple buckets, we implemented Role-Based Access Control (RBAC) at the file level during the exact moment of upload. The `upload.js` engine dynamically injects custom read/write permissions directly into the file payload. This ensures that even if a private chat image URL is leaked, the Appwrite backend will mechanically block any unauthorized user from viewing it.
 
 ---
 
