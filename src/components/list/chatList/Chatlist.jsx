@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import useUserStore from "../../../lib/userStore";
+import { useChatStore } from "../../../lib/chatStore";
 import { databases, client, appwriteConfig } from "../../../lib/appwrite"; 
 import "./chatList.css";
 import AddUser from "./addUser/AddUser";
@@ -7,11 +8,15 @@ import AddUser from "./addUser/AddUser";
 const ChatList = () => {
   const [chats, setChats] = useState([]);
   const [addMode, setAddMode] = useState(false);
+  const [input, setInput] = useState("");
   const { currentUser } = useUserStore();
+  const { chatId, changeChat } = useChatStore();
 
   useEffect(() => {
     // Prevent running if user isn't fully loaded yet
-    if (!currentUser?.$id) return;
+    if (!currentUser?.$id && !currentUser?.id) return;
+
+    const currentUserId = currentUser?.$id || currentUser?.id;
 
     const processChats = async (rawChatsArray) => {
       if (!rawChatsArray || rawChatsArray.length === 0) return [];
@@ -45,7 +50,7 @@ const ChatList = () => {
         const doc = await databases.getDocument(
           appwriteConfig.databaseId,
           appwriteConfig.userchatsCollectionId,
-          currentUser.$id
+          currentUserId
         );
         
         console.log("Raw Appwrite chats array:", { chats: doc.chats });
@@ -59,10 +64,9 @@ const ChatList = () => {
 
     getInitialChats();
 
-    const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.userchatsCollectionId}.documents.${currentUser.$id}`;
+    const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.userchatsCollectionId}.documents.${currentUserId}`;
     
     const unSub = client.subscribe(channel, async (response) => {
-      // We take the new chats array and run it through our helper function again!
       if (response.events.some((e) => e.includes(".update")) || response.events.some((e) => e.includes(".create"))) {
         const newProcessedChats = await processChats(response.payload.chats);
         setChats(newProcessedChats);
@@ -72,16 +76,54 @@ const ChatList = () => {
     return () => {
       unSub();
     };
-  }, [currentUser?.$id]);
+  }, [currentUser?.$id, currentUser?.id]);
 
-  console.log("Current React chats state:", chats);
+  const handleSelect = async (chat) => {
+    const userChats = chats.map((item) => {
+      const { user, ...rest } = item;
+      return rest;
+    });
+
+    const chatIndex = userChats.findIndex(
+      (item) => item.chatId === chat.chatId
+    );
+
+    if (chatIndex !== -1) {
+      userChats[chatIndex].isSeen = true;
+      const currentUserId = currentUser?.$id || currentUser?.id;
+
+      try {
+        const stringifiedChats = userChats.map((c) => JSON.stringify(c));
+
+        await databases.updateDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.userchatsCollectionId,
+          currentUserId,
+          {
+            chats: stringifiedChats,
+          }
+        );
+        changeChat(chat.chatId, chat.user);
+      } catch (err) {
+        console.log("Error updating isSeen in Appwrite:", err);
+      }
+    }
+  };
+
+  const filteredChats = chats.filter((c) =>
+    c.user?.username?.toLowerCase().includes(input.toLowerCase())
+  );
 
   return (
     <div className="chatList">
       <div className="search">
         <div className="searchBar">
           <img src="./search.png" alt="" />
-          <input type="text" placeholder="Search" />
+          <input
+            type="text"
+            placeholder="Search"
+            onChange={(e) => setInput(e.target.value)}
+          />
         </div>
         <img
           src={addMode ? "./minus.png" : "./plus.png"}
@@ -91,17 +133,40 @@ const ChatList = () => {
         />
       </div>
 
-      {chats.map((chat) => (
-        <div className="item" key={chat.chatId}>
-          <img src={chat.user?.avatar || "./avatar.png"} alt="" />
-          <div className="texts">
-            <span>{chat.user?.username || "Unknown User"}</span>
-            <p>{chat.lastMessage}</p>
+      {filteredChats.map((chat) => {
+        const currentUserId = currentUser?.$id || currentUser?.id;
+        const isBlocked = chat.user?.blocked?.includes(currentUserId);
+
+        return (
+          <div
+            className="item"
+            key={chat.chatId}
+            onClick={() => handleSelect(chat)}
+            style={{
+              backgroundColor: chat?.isSeen ? "transparent" : "#5183fe",
+            }}
+          >
+            <img
+              src={
+                isBlocked
+                  ? "./avatar.png"
+                  : chat.user?.avatar || "./avatar.png"
+              }
+              alt=""
+            />
+            <div className="texts">
+              <span>
+                {isBlocked
+                  ? "User"
+                  : chat.user?.username || "Unknown User"}
+              </span>
+              <p>{chat.lastMessage}</p>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       
-      { addMode && <AddUser setAddMode={setAddMode} />}
+      {addMode && <AddUser setAddMode={setAddMode} />}
     </div>
   );
 };

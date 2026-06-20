@@ -6,10 +6,12 @@ import List from "./components/list/List";
 import Login from "./components/login/Login"
 import Notification from "./components/notification/Notification";
 import useUserStore from "./lib/userStore";
+import { useChatStore } from "./lib/chatStore";
 
 const App = () => {
 
   const { currentUser, isLoading, fetchUserInfo } = useUserStore();
+  const { chatId } = useChatStore();
   
   console.log("Current User Object:", currentUser);
 
@@ -34,8 +36,8 @@ const App = () => {
       currentUser ? (
         <>
          <List/>
-         <Chat/>
-         <Detail/>
+         {chatId && <Chat/>}
+         {chatId && <Detail/>}
         </>
       ) : 
       (

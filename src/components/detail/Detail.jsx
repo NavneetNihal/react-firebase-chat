@@ -1,10 +1,45 @@
 import "./detail.css"
-import { account } from "../../lib/appwrite";
+import { account, databases, appwriteConfig } from "../../lib/appwrite";
 import useUserStore from "../../lib/userStore";
+import { useChatStore } from "../../lib/chatStore";
 import { toast } from "react-toastify";
 
 const Detail = () => {
-  const { fetchUserInfo } = useUserStore();
+  const { currentUser, fetchUserInfo } = useUserStore();
+  const { user, isCurrentUserBlocked, isReceiverBlocked, changeBlock } = useChatStore();
+
+  const handleBlock = async () => {
+    if (!user) return;
+
+    const currentUserId = currentUser?.$id || currentUser?.id;
+    const otherUserId = user?.$id || user?.id;
+
+    try {
+      const isBlocked = currentUser.blocked?.includes(otherUserId);
+      const updatedBlocked = isBlocked 
+        ? currentUser.blocked.filter((id) => id !== otherUserId) 
+        : [...(currentUser.blocked || []), otherUserId];
+
+      await databases.updateDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.usersCollectionId,
+        currentUserId,
+        {
+          blocked: updatedBlocked,
+        }
+      );
+
+      // Mutably update the local store so subsequent clicks work without reloading
+      currentUser.blocked = updatedBlocked;
+      
+      // Tell the UI to update the block status
+      changeBlock();
+
+    } catch (err) {
+      console.log(err);
+      toast.error("Failed to block/unblock user");
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -20,9 +55,9 @@ const Detail = () => {
   return (
     <div className='detail'>
       <div className="user">
-        <img src="./avatar.png" alt="" />
-        <h2>Jan Doe</h2>
-        <p>Lorem ipsum dolor sit amet.</p>
+        <img src={user?.avatar || "./avatar.png"} alt="" />
+        <h2>{user?.username || "User"}</h2>
+        <p>{user?.status || "Available"}</p>
       </div>
       {/* Info Section */}
       <div className="info">
@@ -73,7 +108,13 @@ const Detail = () => {
             <img src="./arrowUp.png" alt="" />
           </div>
         </div>
-        <button>Block User</button>
+        <button onClick={handleBlock}>
+          {isCurrentUserBlocked
+            ? "You are Blocked!"
+            : isReceiverBlocked
+            ? "Unblock User"
+            : "Block User"}
+        </button>
         <button className="logout" onClick={handleLogout}>Logout</button>
        </div>
     </div>

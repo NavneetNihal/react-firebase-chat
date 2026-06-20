@@ -11,7 +11,8 @@ const upload = async (file, permissions = []) => {
         );
 
         // Get the URL to view the image
-        return storage.getFileView(appwriteConfig.bucketId, uploadedFile.$id);
+        const fileUrl = storage.getFileView(appwriteConfig.bucketId, uploadedFile.$id);
+        return fileUrl.toString();
     } catch (error) {
         console.error("Error uploading image:", error);
         throw new Error("Failed to upload image. Please try again.");
