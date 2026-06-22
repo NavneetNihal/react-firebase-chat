@@ -10,7 +10,7 @@ const ChatList = () => {
   const [addMode, setAddMode] = useState(false);
   const [input, setInput] = useState("");
   const { currentUser } = useUserStore();
-  const { chatId, changeChat } = useChatStore();
+  const { chatId, changeChat, resetChat } = useChatStore();
 
   useEffect(() => {
     // Prevent running if user isn't fully loaded yet
@@ -110,6 +110,96 @@ const ChatList = () => {
     }
   };
 
+  const handleDelete = async (e, targetChatId, otherUserId) => {
+    e.stopPropagation();
+    const currentUserId = currentUser?.$id || currentUser?.id;
+
+    try {
+      // 1. Delete from current user's chats
+      const userChatsDoc = await databases.getDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.userchatsCollectionId,
+        currentUserId
+      );
+
+      if (userChatsDoc?.chats) {
+        const parsedChats = userChatsDoc.chats.map((c) => {
+          try {
+            return typeof c === "string" ? JSON.parse(c) : c;
+          } catch {
+            return null;
+          }
+        }).filter(Boolean);
+
+        const updatedChats = parsedChats
+          .filter((c) => c.chatId !== targetChatId)
+          .map((c) => JSON.stringify(c));
+
+        await databases.updateDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.userchatsCollectionId,
+          currentUserId,
+          {
+            chats: updatedChats,
+          }
+        );
+      }
+
+      // 2. Delete from other user's chats
+      if (otherUserId) {
+        try {
+          const otherUserChatsDoc = await databases.getDocument(
+            appwriteConfig.databaseId,
+            appwriteConfig.userchatsCollectionId,
+            otherUserId
+          );
+
+          if (otherUserChatsDoc?.chats) {
+            const parsedOtherChats = otherUserChatsDoc.chats.map((c) => {
+              try {
+                return typeof c === "string" ? JSON.parse(c) : c;
+              } catch {
+                return null;
+              }
+            }).filter(Boolean);
+
+            const updatedOtherChats = parsedOtherChats
+              .filter((c) => c.chatId !== targetChatId)
+              .map((c) => JSON.stringify(c));
+
+            await databases.updateDocument(
+              appwriteConfig.databaseId,
+              appwriteConfig.userchatsCollectionId,
+              otherUserId,
+              {
+                chats: updatedOtherChats,
+              }
+            );
+          }
+        } catch (err) {
+          console.log("Error deleting chat from other user's list:", err);
+        }
+      }
+
+      // 3. Delete the chat room document
+      try {
+        await databases.deleteDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.chatsCollectionId,
+          targetChatId
+        );
+      } catch (err) {
+        console.log("Error deleting chat room document:", err);
+      }
+
+      if (chatId === targetChatId) {
+        resetChat();
+      }
+    } catch (err) {
+      console.log("Error deleting chat:", err);
+    }
+  };
+
   const filteredChats = chats.filter((c) =>
     c.user?.username?.toLowerCase().includes(input.toLowerCase())
   );
@@ -162,6 +252,7 @@ const ChatList = () => {
               </span>
               <p>{chat.lastMessage}</p>
             </div>
+            <button className="deleteBtn" onClick={(e) => handleDelete(e, chat.chatId, chat.receiverId)}>Delete</button>
           </div>
         );
       })}

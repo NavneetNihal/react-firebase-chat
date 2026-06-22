@@ -33,7 +33,7 @@ const Chat = () => {
   });
 
   const { currentUser } = useUserStore();
-  const { chatId, user, isCurrentUserBlocked, isReceiverBlocked } = useChatStore();
+  const { chatId, user, isCurrentUserBlocked, isReceiverBlocked, toggleDetail, resetChat } = useChatStore();
 
   const endRef = useRef(null);
 
@@ -78,7 +78,6 @@ const Chat = () => {
 
   const handleEmoji = (e) => {
     setText((prev) => prev + e.emoji);
-    setOpen(false);
   };
 
   const handleImg = (e) => {
@@ -90,8 +89,11 @@ const Chat = () => {
     }
   };
 
-  const handleSend = async () => {
+  const handleSend = async (e) => {
+    e?.preventDefault();
     if (text === "" && !img.file) return;
+
+    setOpen(false);
 
     let imgUrl = null;
     const currentUserId = currentUser?.$id || currentUser?.id;
@@ -179,13 +181,17 @@ const Chat = () => {
         url: "",
       });
       setText("");
+      setOpen(false);
     }
   };
 
   return (
     <div className="chat">
       <div className="top">
-        <div className="user">
+        <div className="backButton" onClick={resetChat}>
+          <img src="./arrowDown.png" alt="Back" />
+        </div>
+        <div className="user" onClick={toggleDetail} style={{ cursor: "pointer" }}>
           <img src={user?.avatar || "./avatar.png"} alt="" />
           <div className="texts">
             <span>{user?.username || "User"}</span>
@@ -195,7 +201,7 @@ const Chat = () => {
         <div className="icons">
           <img src="./phone.png" alt="" />
           <img src="./video.png" alt="" />
-          <img src="./info.png" alt="" />
+          <img src="./info.png" alt="" onClick={toggleDetail} style={{ cursor: "pointer" }} />
         </div>
       </div>
       <div className="center">
@@ -234,7 +240,7 @@ const Chat = () => {
         )}
         <div ref={endRef}></div>
       </div>
-      <div className="bottom">
+      <form className="bottom" onSubmit={handleSend}>
         <div className="icons">
           <label htmlFor="file">
             <img src="./img.png" alt="" />
@@ -270,13 +276,13 @@ const Chat = () => {
           </div>
         </div>
         <button
+          type="submit"
           className="sendButton"
-          onClick={handleSend}
           disabled={isCurrentUserBlocked || isReceiverBlocked}
         >
           Send
         </button>
-      </div>
+      </form>
     </div>
   );
 };

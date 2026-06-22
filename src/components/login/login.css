@@ -90,3 +90,21 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+@media (max-width: 768px) {
+    .login {
+        flex-direction: column;
+        gap: 50px;
+        overflow-y: auto;
+        padding: 40px 20px;
+        align-items: stretch;
+    }
+
+    .login .separator {
+        display: none;
+    }
+
+    .login .item {
+        width: 100%;
+    }
+}

@@ -11,7 +11,7 @@ import { useChatStore } from "./lib/chatStore";
 const App = () => {
 
   const { currentUser, isLoading, fetchUserInfo } = useUserStore();
-  const { chatId } = useChatStore();
+  const { chatId, isDetailOpen } = useChatStore();
   
   console.log("Current User Object:", currentUser);
 
@@ -30,7 +30,7 @@ const App = () => {
   if (isLoading) return <div className="loading"></div>;
 
   return (
-    <div className='container'>
+    <div className={`container ${chatId ? "chat-active" : ""} ${isDetailOpen ? "detail-active" : ""}`}>
 
     {
       currentUser ? (

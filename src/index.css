@@ -38,3 +38,56 @@ body {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+@media (max-width: 768px) {
+  body {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .container {
+    width: 100vw;
+    height: 100vh;
+    border: none;
+    border-radius: 0;
+  }
+
+  /* By default, on mobile, show only list, hide chat and detail */
+  .list {
+    flex: 1;
+    width: 100% !important;
+    display: flex !important;
+  }
+
+  .chat {
+    display: none !important;
+  }
+
+  .detail {
+    display: none !important;
+  }
+
+  /* When chat is active, show only chat, hide list and detail */
+  .container.chat-active {
+    .list {
+      display: none !important;
+    }
+    .chat {
+      display: flex !important;
+      flex: 1;
+      width: 100% !important;
+    }
+  }
+
+  /* When detail is active, show only detail, hide list and chat */
+  .container.chat-active.detail-active {
+    .chat {
+      display: none !important;
+    }
+    .detail {
+      display: flex !important;
+      flex: 1;
+      width: 100% !important;
+    }
+  }
+}
