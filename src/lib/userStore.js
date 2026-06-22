@@ -6,7 +6,6 @@ const useUserStore = create((set) => ({
   isLoading: true,
   fetchUserInfo: async(id) => {
     if(!id) return set({currentUser: null, isLoading: false})
-
         try { 
             const doc = await databases.getDocument(
                 appwriteConfig.databaseId,
@@ -17,7 +16,13 @@ const useUserStore = create((set) => ({
         } catch (error) {
             return set({currentUser: null, isLoading: false})
         }
-  }
+  },
+  // Immediately patch local state without re-fetching from DB
+  updateCurrentUser: (fields) => {
+    set((state) => ({
+      currentUser: state.currentUser ? { ...state.currentUser, ...fields } : state.currentUser,
+    }));
+  },
 }))
 
 export default useUserStore;

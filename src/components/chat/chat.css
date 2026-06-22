@@ -129,6 +129,35 @@
                 span{
                     font-size: 13px;
                 }
+
+                /* Audio message bubble */
+                .audioMessage {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    background-color: rgba(17, 25, 40, 0.5);
+                    border-radius: 12px;
+                    padding: 10px 14px;
+                    min-width: 220px;
+                    max-width: 320px;
+
+                    .micIcon {
+                        width: 20px;
+                        height: 20px;
+                        border-radius: 0;
+                        filter: brightness(0) invert(1);
+                        opacity: 0.8;
+                        flex-shrink: 0;
+                    }
+
+                    audio {
+                        flex: 1;
+                        height: 32px;
+                        outline: none;
+                        border-radius: 8px;
+                        accent-color: #5183fe;
+                    }
+                }
             }
         }
 
@@ -199,6 +228,304 @@
                 opacity: 0.6;
             }
         }
+    }
+}
+
+/* Active recording toolbar */
+.recordingBar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    background-color: rgba(255, 50, 50, 0.07);
+    border-top: 1px solid rgba(255, 50, 50, 0.2);
+    animation: fadeIn 0.2s ease;
+
+    .recDot {
+        width: 10px;
+        height: 10px;
+        background-color: #ff3b3b;
+        border-radius: 50%;
+        animation: blink 1s infinite;
+        flex-shrink: 0;
+    }
+
+    .recTimer {
+        font-size: 16px;
+        font-weight: 700;
+        color: #ff3b3b;
+        letter-spacing: 1px;
+        min-width: 46px;
+    }
+
+    /* Live waveform canvas — grows to fill remaining space */
+    .waveformCanvas {
+        flex: 1;
+        height: 44px;
+        border-radius: 8px;
+        background: transparent;
+        display: block;
+    }
+
+    .voiceStopBtn {
+        width: 34px;
+        height: 34px;
+        background-color: #ff3b3b;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        font-size: 11px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: background-color 0.2s;
+
+        &:hover { background-color: #cc2020; }
+    }
+}
+
+/* Preview bar after stop recording, before sending */
+.voicePreviewBar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    background-color: rgba(81, 131, 254, 0.07);
+    border-top: 1px solid rgba(81, 131, 254, 0.2);
+    animation: fadeIn 0.2s ease;
+
+    .voicePreviewInner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+        background-color: rgba(17, 25, 40, 0.6);
+        border-radius: 12px;
+        padding: 8px 14px;
+
+        .micIcon {
+            width: 18px;
+            height: 18px;
+            filter: brightness(0) invert(1);
+            opacity: 0.7;
+            flex-shrink: 0;
+        }
+
+        .previewAudio {
+            flex: 1;
+            height: 32px;
+            outline: none;
+            accent-color: #5183fe;
+        }
+    }
+
+    .voiceSendBtn {
+        background-color: #5183fe;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 10px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 0.2s;
+
+        &:hover { background-color: #1453f0; }
+    }
+}
+
+.voiceCancelBtn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #a5a5a5;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: color 0.2s, border-color 0.2s;
+
+    &:hover { color: white; border-color: rgba(255,255,255,0.4); }
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Camera Modal ─────────────────────────────── */
+.cameraModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: fadeIn 0.2s ease;
+}
+
+.cameraModalContent {
+    position: relative;
+    background: rgba(17, 25, 40, 0.97);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    overflow: hidden;
+    width: min(480px, 95vw);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.cameraCloseBtn {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: rgba(0,0,0,0.5);
+    border: none;
+    color: white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+
+    &:hover { background: rgba(255,60,60,0.7); }
+}
+
+/* Live video feed */
+.cameraLive {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.cameraVideo {
+    width: 100%;
+    max-height: 360px;
+    object-fit: cover;
+    display: block;
+    border-radius: 16px 16px 0 0;
+}
+
+/* Shutter button */
+.captureBtn {
+    margin: 20px auto 24px;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: white;
+    border: 4px solid rgba(255,255,255,0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 0 0 6px rgba(255,255,255,0.15);
+
+    &:hover {
+        transform: scale(1.06);
+        box-shadow: 0 0 0 8px rgba(255,255,255,0.2);
+    }
+    &:active { transform: scale(0.94); }
+}
+
+.captureRing {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid #1a1a2e;
+    display: block;
+}
+
+/* Preview after capture */
+.cameraPreview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.capturedImg {
+    width: 100%;
+    max-height: 360px;
+    object-fit: cover;
+    border-radius: 16px 16px 0 0;
+}
+
+.cameraActions {
+    display: flex;
+    gap: 14px;
+    padding: 20px;
+    width: 100%;
+    justify-content: flex-end;
+}
+
+.retakeBtn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #ccc;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+
+    &:hover { background: rgba(255,255,255,0.06); }
+}
+
+.cameraSendBtn {
+    background: #5183fe;
+    border: none;
+    color: white;
+    border-radius: 8px;
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+
+    &:hover { background: #1453f0; }
+}
+
+.cameraError {
+    padding: 40px 30px;
+    text-align: center;
+    color: #ff6b6b;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    p { font-size: 15px; line-height: 1.5; }
+
+    button {
+        align-self: center;
+        background: transparent;
+        border: 1px solid rgba(255,255,255,0.15);
+        color: white;
+        padding: 8px 20px;
+        border-radius: 6px;
+        cursor: pointer;
     }
 }
 

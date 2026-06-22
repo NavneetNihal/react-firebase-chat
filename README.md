@@ -1,50 +1,145 @@
-# React Firebase Chat App (Powered by Appwrite)
+# React Chat App (Powered by Appwrite)
 
-An elegant, real-time chat application built with **React**, **Vite**, and **Appwrite**. Features user authentication, live chat syncing, image sharing, and dynamic user blocking.
+An elegant, real-time chat application built with **React**, **Vite**, and **Appwrite**. Features user authentication, live chat syncing, voice notes, camera capture, image sharing, mobile responsiveness, and dynamic user profiles.
 
 ---
 
 ## Tech Stack
-- **Frontend**: React 18, Vite
-- **Backend / BaaS**: Appwrite (Auth, Database, Storage)
-- **State Management**: Zustand
-- **Notifications**: React Toastify
-- **Emoji**: emoji-picker-react
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite |
+| Backend / BaaS | Appwrite (Auth, Database, Realtime, Storage) |
+| State Management | Zustand |
+| Notifications | React Toastify |
+| Emoji | emoji-picker-react |
+| Audio | Web Audio API (AnalyserNode + MediaRecorder) |
+| Camera | WebRTC `getUserMedia` + Canvas |
 
 ---
 
-## Main Features
-- **Real-Time Messaging**: Instant text and image message syncing via Appwrite Realtime.
-- **Dynamic User Blocking**: Instantly block/unblock users. Updates the database and UI simultaneously without page refreshes.
-- **Live Sidebar Sync**: Global chat list updates instantly when new messages arrive or when messages are left unread (Blue Dot feature).
-- **Secure Image Uploads**: Profile avatars and chat images are uploaded directly to Appwrite Storage buckets.
-- **Authentication**: Full email/password registration and login flow with session persistence.
+## Features
+
+### 💬 Core Messaging
+- **Real-Time Text Messaging** — Instant syncing via Appwrite Realtime subscriptions.
+- **Image Sharing** — Upload and send photos directly in chat. Stored securely in Appwrite Storage.
+- **Emoji Picker** — Full emoji panel built into the message input.
+- **Blue Dot Unread Indicator** — Sidebar highlights unread chats automatically.
+
+### 🎤 Voice Notes
+- Click the **microphone icon** to start recording.
+- A **live waveform visualizer** (40 animated bars driven by `AnalyserNode` + `requestAnimationFrame`) reacts to your actual voice amplitude in real time — like WhatsApp.
+- Click **Stop** → preview the recording with an audio player before sending.
+- Click **Send** → audio uploaded to Appwrite Storage, rendered as a `<audio>` bubble in both users' chat windows in real time.
+- **Cancel** discards the recording and releases the mic.
+
+### 📷 Camera Capture
+- Click the **camera icon** to open a live webcam modal.
+- Live video feed via `getUserMedia({ video: true })`.
+- Click the **shutter button** to capture a still frame (snapshotted via `<canvas>`).
+- **Preview** the photo, **Retake** if needed, or click **Send Photo**.
+- Photo is uploaded to Appwrite Storage and sent through the exact same pipeline as regular images.
+
+### 👤 User Profiles
+- **Edit Profile** modal — change your avatar and username.
+- **Status** — set a custom status (e.g. "Busy", "Available", "In a meeting") stored in the Appwrite `users` collection.
+- Status shows in:
+  - Your own sidebar (below your username)
+  - The chat header when someone opens a chat with you
+  - The detail/info panel on the right
+- Avatar updates immediately in the sidebar via Zustand local state patch (no full re-fetch required).
+
+### 📱 Mobile Responsive
+- Full mobile-first layout using CSS media queries and dynamic class toggling.
+- On mobile: the chat list, chat window, and detail panel stack into a single-panel view with back navigation.
+- Back buttons navigate: Detail → Chat → Chat List.
+
+### 🔒 Security & Blocking
+- **Block / Unblock** users instantly — UI flips without a page refresh.
+- **Delete Chat** — removes the chat from both users' lists and deletes the chat room document.
+- **Zero-trust file security** — each uploaded file gets its own RBAC permissions set at upload time.
 
 ---
 
 ## Core Engineering & Solved Pain Points
 
-During development, we conquered several major architectural challenges and Appwrite-specific constraints:
-
 ### 1. Single-Bucket Zero-Trust File Security (RBAC)
-**Pain Point:** Appwrite's free tier only allows one storage bucket, but the app needs to store both public avatars and strictly private chat images with completely different security rules.
-**Solution:** Instead of managing multiple buckets, we implemented Role-Based Access Control (RBAC) at the file level during the exact moment of upload. The `upload.js` engine dynamically injects custom read/write permissions directly into the file payload. This ensures that even if a private chat image URL is leaked, the Appwrite backend will mechanically block any unauthorized user from viewing it.
+**Problem:** Appwrite free tier = one storage bucket. Profile avatars need public read; chat images need private read (only sender + receiver).
 
-### 2. The Appwrite Array Serialization Constraint
-**Pain Point:** Appwrite's database does not support natively nesting complex JSON objects inside array fields (which we needed for `userchats` and `messages`).
-**Solution:** We built a custom JSON serialization engine. Before uploading, the engine runs `JSON.stringify()` on every message object, converting it to a raw string. When downloading, the UI radar automatically runs `JSON.parse()` to re-inflate the strings back into usable JavaScript objects.
+**Solution:** `upload.js` dynamically injects per-file `Permission.read(Role.user(...))` permissions at upload time. Even if a private image URL leaks, Appwrite's backend blocks unauthorized access mechanically.
 
-### 3. The Double-Loop Sidebar Sync
-**Pain Point:** When a message is sent, the engine must update the left sidebar (`userchats`) for *both* the sender and the receiver, without causing database collisions.
-**Solution:** We implemented a strict sequential `for...of` loop in `Chat.jsx`. It individually fetches the sender's sidebar, updates the preview text, uploads it, and *then* fetches the receiver's sidebar, flags it with an `isSeen: false` (Blue Dot), and uploads it. This guarantees zero data corruption.
+---
 
-### 4. The `getFileView` Storage Bug
-**Pain Point:** Appwrite's `getFileView` API returned a complex URL object instead of a raw string, which corrupted the database payload.
-**Solution:** We intercepted the storage pipeline in `upload.js` and forcefully appended `.toString()` to the `getFileView` result, ensuring the database only receives clean, permanent Cloud URLs.
+### 2. Appwrite Array Serialization Constraint
+**Problem:** Appwrite doesn't support native nested JSON objects inside array fields — needed for `messages` and `userchats`.
 
-### 5. Zero-Refresh Blocking System
-**Pain Point:** Blocking a user traditionally required a full page refresh to properly re-sync the UI with the database.
-**Solution:** We built a mechanical blocking engine in `Detail.jsx`. It uses high-speed array `.filter()` logic to block/unblock, fires the new array to the Appwrite database, and instantly overwrites the local `currentUser` memory vault using Zustand. This triggers an immediate React re-render, flipping the UI instantly without touching the network again.
+**Solution:** Custom JSON serialization engine. Every message object is `JSON.stringify()`-ed before writing, and `JSON.parse()`-ed on read. All edge cases (malformed strings, null entries) are caught and filtered.
+
+---
+
+### 3. Double-Loop Sidebar Sync
+**Problem:** Sending a message must update the sidebar (`userchats`) for both sender and receiver atomically.
+
+**Solution:** Sequential `for...of` loop — fetches sender's sidebar, updates preview + `isSeen: true`, commits, then fetches receiver's sidebar, sets `isSeen: false` (Blue Dot), commits. Zero data collisions.
+
+---
+
+### 4. Live Waveform Visualizer (Web Audio API)
+**Problem:** A plain timer bar doesn't tell you if the mic is actually picking up audio.
+
+**Solution:** `AudioContext` → `AnalyserNode` (fftSize=256) → reads `getByteFrequencyData` per animation frame → renders 40 frequency-bucketed bars on `<canvas>` with a blue gradient that intensifies with amplitude. The pipeline runs in parallel with `MediaRecorder` so audio capture is unaffected.
+
+---
+
+### 5. Camera Capture via WebRTC + Canvas Snapshot
+**Problem:** `<input type="file" capture>` is unreliable on desktop and gives no preview.
+
+**Solution:** `getUserMedia({ video: true })` pipes into a `<video>` element. On capture, `ctx.drawImage(video)` stamps the current frame onto a hidden `<canvas>`, `toDataURL()` converts it to a preview image, and on send, a `Blob` → `File` conversion feeds into the existing `upload()` pipeline.
+
+---
+
+### 6. Appwrite Schema Fallback for Profile Updates
+**Problem:** The `status` attribute may not exist in a user's Appwrite schema — the entire document update would be rejected, including avatar and username changes.
+
+**Solution:** Two-phase update with isolated error handling:
+1. Avatar upload has its own try/catch with a specific error toast.
+2. Database update is attempted with `{ username, avatar, status }` first.
+3. If Appwrite returns code `400` / "Unknown attribute", a fallback retries with only `{ username, avatar }`.
+4. `updateCurrentUser()` in Zustand immediately patches local state so the sidebar updates visually regardless of DB result.
+
+---
+
+### 7. Instant Local State Patching (Zustand)
+**Problem:** After a profile save, `fetchUserInfo` re-fetches from Appwrite — if it fails, `currentUser` is set to `null`, breaking the UI.
+
+**Solution:** Added `updateCurrentUser(fields)` action to `userStore`. This synchronously merges new fields into the current user object in the Zustand store immediately after save. `fetchUserInfo` still runs in the background as a non-critical sync, but is wrapped in `.catch(() => {})` so it cannot crash the session.
+
+---
+
+## Appwrite Schema Requirements
+
+### `users` collection attributes
+| Key | Type | Required | Default |
+|---|---|---|---|
+| `username` | String | ✅ Yes | — |
+| `email` | String | ✅ Yes | — |
+| `id` | String | ✅ Yes | — |
+| `avatar` | String | No | NULL |
+| `blocked` | String[] | No | NULL |
+| `status` | String | No | `Available` |
+
+### `chats` collection attributes
+| Key | Type | Notes |
+|---|---|---|
+| `messages` | String[] | JSON-serialized message objects |
+
+### `userchats` collection attributes
+| Key | Type | Notes |
+|---|---|---|
+| `chats` | String[] | JSON-serialized chat metadata |
+
+### Storage Bucket
+One bucket for all files. Per-file RBAC permissions are injected at upload time.
 
 ---
 
@@ -55,12 +150,14 @@ During development, we conquered several major architectural challenges and Appw
    git clone https://github.com/NavneetNihal/react-firebase-chat.git
    cd react-firebase-chat
    ```
+
 2. **Install dependencies**
    ```bash
    npm install
    ```
+
 3. **Configure environment variables**
-   Create a `.env` file in the root with your Appwrite project credentials:
+   Create a `.env` file in the root:
    ```env
    VITE_APPWRITE_URL=https://cloud.appwrite.io/v1
    VITE_APPWRITE_PROJECT_ID=your_project_id
@@ -70,11 +167,17 @@ During development, we conquered several major architectural challenges and Appw
    VITE_APPWRITE_USERCHATS_COLLECTION_ID=your_userchats_collection_id
    VITE_APPWRITE_BUCKET_ID=your_bucket_id
    ```
-4. **Run the dev server**
+
+4. **Add `status` attribute to your Appwrite `users` collection**
+   - Appwrite Console → Databases → your DB → `users` collection → Attributes → Create attribute → String
+   - Key: `status`, Size: `255`, Required: No, Default: `Available`
+
+5. **Run the dev server**
    ```bash
    npm run dev
    ```
 
 ---
+
 ## License
 MIT
