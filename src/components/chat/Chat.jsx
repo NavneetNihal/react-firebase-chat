@@ -602,6 +602,7 @@ const Chat = () => {
               parsed[idx].lastMessage = "🎤 Voice Note";
               parsed[idx].isSeen = id === currentUserId;
               parsed[idx].updatedAt = Date.now();
+              parsed[idx].typing = false; // always clear typing on send to prevent stuck indicator
               await databases.updateDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, id, { chats: parsed.map((c) => JSON.stringify(c)) });
             }
           }
@@ -655,6 +656,7 @@ const Chat = () => {
               parsed[idx].lastMessage = messageText || "[Image]";
               parsed[idx].isSeen = id === currentUserId;
               parsed[idx].updatedAt = Date.now();
+              parsed[idx].typing = false; // always clear typing on send to prevent stuck indicator
               await databases.updateDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, id, { chats: parsed.map((c) => JSON.stringify(c)) });
             }
           }

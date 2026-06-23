@@ -57,40 +57,37 @@ const ChatList = () => {
 
     const healTypingStatus = async (rawChats) => {
       if (!rawChats || rawChats.length === 0) return;
-      for (const itemString of rawChats) {
-        try {
-          const item = typeof itemString === "string" ? JSON.parse(itemString) : itemString;
-          const otherUserId = item.receiverId;
-          const chatId = item.chatId;
-          
-          const otherDoc = await databases.getDocument(
+      // The stuck typing flag lives in OUR OWN userchats doc
+      // (the sender wrote typing:true into our doc — we need to clear it ourselves)
+      try {
+        const parsed = rawChats.map((c) => {
+          try { return typeof c === "string" ? JSON.parse(c) : c; }
+          catch { return null; }
+        }).filter(Boolean);
+
+        let dirty = false;
+        for (const item of parsed) {
+          if (item.typing) {
+            item.typing = false;
+            dirty = true;
+            console.log(`[Heal] Cleared stuck typing for chat ${item.chatId}`);
+          }
+        }
+
+        if (dirty) {
+          await databases.updateDocument(
             appwriteConfig.databaseId,
             appwriteConfig.userchatsCollectionId,
-            otherUserId
+            currentUserId,
+            { chats: parsed.map((c) => JSON.stringify(c)) }
           );
-          if (otherDoc?.chats) {
-            const parsed = otherDoc.chats.map((c) => {
-              try { return typeof c === "string" ? JSON.parse(c) : c; }
-              catch { return null; }
-            }).filter(Boolean);
-            
-            const idx = parsed.findIndex((c) => c.chatId === chatId);
-            if (idx !== -1 && parsed[idx].typing) {
-              parsed[idx].typing = false;
-              await databases.updateDocument(
-                appwriteConfig.databaseId,
-                appwriteConfig.userchatsCollectionId,
-                otherUserId,
-                { chats: parsed.map((c) => JSON.stringify(c)) }
-              );
-              console.log(`Self-healed stuck typing status for chat ${chatId} with user ${otherUserId}`);
-            }
-          }
-        } catch (e) {
-          console.warn("Self-heal typing failed for a chat:", e.message);
+          console.log("[Heal] Wrote healed typing statuses back to DB.");
         }
+      } catch (e) {
+        console.warn("[Heal] healTypingStatus failed:", e.message);
       }
     };
+
 
     const getInitialChats = async () => {
       try {
@@ -119,24 +116,25 @@ const ChatList = () => {
         const payloadChats = response.payload.chats || [];
         const newProcessedChats = await processChats(payloadChats);
 
-        // Check if there is a new unread message in a chat other than the currently active one
+        // Check if there is a new unread message (NOT a typing indicator update)
         let shouldAlert = false;
         for (const itemString of payloadChats) {
           try {
             const incoming = typeof itemString === "string" ? JSON.parse(itemString) : itemString;
             if (
-              incoming && 
-              !incoming.isSeen && 
+              incoming &&
+              !incoming.isSeen &&
+              incoming.lastMessage &&                      // must have a real message
+              !incoming.typing &&                          // exclude pure typing-status updates
               (incoming.chatId !== useChatStore.getState().chatId || document.hidden || !document.hasFocus())
             ) {
               const existing = chatsRef.current.find((c) => c.chatId === incoming.chatId);
               if (
-                !existing || 
-                !existing.updatedAt || 
-                incoming.updatedAt > existing.updatedAt || 
-                incoming.lastMessage !== existing.lastMessage
+                !existing ||
+                !existing.updatedAt ||
+                incoming.updatedAt > existing.updatedAt
               ) {
-                console.log("New message incoming for chat:", incoming.chatId, "playing alert...");
+                console.log("[Sound] New message detected for chat:", incoming.chatId, "→ playing oof");
                 shouldAlert = true;
                 break;
               }
@@ -149,6 +147,16 @@ const ChatList = () => {
         }
 
         setChats(newProcessedChats);
+
+        // Auto-heal any typing flags stuck in our own doc
+        // (e.g. if sender's handleSend wrote back typing:true due to a race)
+        const hasStuckTyping = payloadChats.some((s) => {
+          try { const c = typeof s === "string" ? JSON.parse(s) : s; return !!c.typing; }
+          catch { return false; }
+        });
+        if (hasStuckTyping) {
+          healTypingStatus(payloadChats);
+        }
       }
     });
 
