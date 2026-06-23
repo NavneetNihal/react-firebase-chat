@@ -425,8 +425,18 @@ const Chat = () => {
     if (!audioBlob) return;
     const currentUserId = currentUser?.$id || currentUser?.id;
     const otherUserId = user?.$id || user?.id;
+
+    const voiceBlob = audioBlob;
+    const voicePreviewUrl = audioPreviewUrl;
+
+    // Immediately clear state to update the UI instantly
+    setAudioBlob(null);
+    setAudioPreviewUrl(null);
+    setRecordingDuration(0);
+    audioChunksRef.current = [];
+
     try {
-      const audioFile = new File([audioBlob], "voicenote.webm", { type: "audio/webm" });
+      const audioFile = new File([voiceBlob], "voicenote.webm", { type: "audio/webm" });
       const permissions = [
         Permission.read(Role.any()),
         Permission.update(Role.user(currentUserId)),
@@ -453,13 +463,10 @@ const Chat = () => {
           }
         } catch (err) { console.error(err); }
       }
-    } catch (err) { console.error("Error sending voice note:", err); }
-    finally {
-      setAudioBlob(null);
-      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
-      setAudioPreviewUrl(null);
-      setRecordingDuration(0);
-      audioChunksRef.current = [];
+    } catch (err) {
+      console.error("Error sending voice note:", err);
+    } finally {
+      if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
     }
   };
 
@@ -470,14 +477,23 @@ const Chat = () => {
     if (text === "" && !img.file) return;
     setOpen(false);
 
+    // Save states locally for the background requests
+    const messageText = text;
+    const imgFile = img.file;
+
+    // Immediately clear inputs for a highly responsive UI
+    setText("");
+    setImg({ file: null, url: "" });
+    setOpen(false);
+
     let imgUrl = null;
     const currentUserId = currentUser?.$id || currentUser?.id;
     const otherUserId = user?.$id || user?.id;
 
     try {
-      if (img.file) imgUrl = await upload(img.file);
+      if (imgFile) imgUrl = await upload(imgFile);
       const chatDoc = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.chatsCollectionId, chatId);
-      const newMessage = JSON.stringify({ senderId: currentUserId, text, createdAt: Date.now(), ...(imgUrl && { img: imgUrl }) });
+      const newMessage = JSON.stringify({ senderId: currentUserId, text: messageText, createdAt: Date.now(), ...(imgUrl && { img: imgUrl }) });
       await databases.updateDocument(appwriteConfig.databaseId, appwriteConfig.chatsCollectionId, chatId, {
         messages: [...(chatDoc.messages || []), newMessage],
       });
@@ -488,7 +504,7 @@ const Chat = () => {
             const parsed = doc.chats.map((c) => { try { return typeof c === "string" ? JSON.parse(c) : c; } catch { return null; } }).filter(Boolean);
             const idx = parsed.findIndex((c) => c.chatId === chatId);
             if (idx !== -1) {
-              parsed[idx].lastMessage = text || "[Image]";
+              parsed[idx].lastMessage = messageText || "[Image]";
               parsed[idx].isSeen = id === currentUserId;
               parsed[idx].updatedAt = Date.now();
               await databases.updateDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, id, { chats: parsed.map((c) => JSON.stringify(c)) });
@@ -496,11 +512,8 @@ const Chat = () => {
           }
         } catch (err) { console.error(err); }
       }
-    } catch (err) { console.log("Error sending message:", err); }
-    finally {
-      setImg({ file: null, url: "" });
-      setText("");
-      setOpen(false);
+    } catch (err) {
+      console.log("Error sending message:", err);
     }
   };
 
