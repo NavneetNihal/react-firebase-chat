@@ -78,10 +78,8 @@
     }
 
     /* Show left accent if chat is unread */
-    &:not([style*="background-color: transparent"]):not([style*="background-color:rgba(17, 25, 40, 0.75)"]) {
-      &::before {
-        opacity: 1;
-      }
+    &.unread::before {
+      opacity: 1;
     }
 
     img {
