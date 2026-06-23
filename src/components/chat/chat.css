@@ -574,8 +574,8 @@
 
                 .EmojiPickerReact {
                     width: 280px !important;
-                    height: 320px !important;
-                    --epr-picker-height: 320px !important;
+                    height: 380px !important;
+                    --epr-picker-height: 380px !important;
                     --epr-picker-width: 280px !important;
                 }
             }
