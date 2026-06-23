@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import "./chat.css";
 import EmojiPicker from "emoji-picker-react";
+import { ID } from "appwrite";
 import { client, databases, appwriteConfig } from "../../lib/appwrite";
 import { Permission, Role } from "appwrite";
 import { useChatStore } from "../../lib/chatStore";
 import useUserStore from "../../lib/userStore";
+import useCallStore from "../../lib/callStore";
 import upload from "../../lib/upload";
 
 const formatTimeAgo = (timestamp) => {
@@ -209,6 +211,80 @@ const Chat = () => {
 
   const { currentUser } = useUserStore();
   const { chatId, user, isCurrentUserBlocked, isReceiverBlocked, toggleDetail, resetChat } = useChatStore();
+  const { callState, initiateOutgoing } = useCallStore();
+
+  // ── Initiate a call ────────────────────────────────────────────────
+  const handleCall = async (type) => {
+    if (!user || isCurrentUserBlocked || isReceiverBlocked) return;
+    if (callState !== "idle") return;
+    if (!appwriteConfig.callsCollectionId) {
+      alert("Calls collection not configured. Add VITE_APPWRITE_CALLS_COLLECTION_ID to .env");
+      return;
+    }
+    const currentUserId = currentUser?.$id || currentUser?.id;
+    const otherUserId   = user?.$id || user?.id;
+
+    if (!currentUserId || !otherUserId) {
+      alert("Could not start call. User session is missing.");
+      return;
+    }
+
+    try {
+      const permissions = [
+        Permission.read(Role.user(currentUserId)),
+        Permission.read(Role.user(otherUserId)),
+        Permission.update(Role.user(currentUserId)),
+        Permission.update(Role.user(otherUserId)),
+        Permission.delete(Role.user(currentUserId)),
+      ];
+
+      const callData = {
+        callerId:   currentUserId,
+        receiverId: otherUserId,
+        callerName: (currentUser?.username || "Unknown").slice(0, 100),
+        type,
+        status:     "calling",
+        ...(currentUser?.avatar ? { callerAvatar: currentUser.avatar.slice(0, 500) } : {}),
+      };
+
+      // Create the call signaling document in Appwrite
+      let callDoc;
+      try {
+        callDoc = await databases.createDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.callsCollectionId,
+          ID.unique(),
+          callData,
+          permissions
+        );
+      } catch (permErr) {
+        // Fallback: same pattern as chats collection (collection-level permissions)
+        console.warn("Call create with document permissions failed, retrying:", permErr.message);
+        callDoc = await databases.createDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.callsCollectionId,
+          ID.unique(),
+          callData
+        );
+      }
+      // Trigger outgoing call state
+      initiateOutgoing(callDoc.$id, type, {
+        id:     otherUserId,
+        name:   user?.username || "Unknown",
+        avatar: user?.avatar   || "",
+      });
+    } catch (err) {
+      console.error("Failed to initiate call:", err);
+      alert(
+        `Could not start call.\n\n${err.message || err}\n\n` +
+        "Check Appwrite → calls collection:\n" +
+        "• Collection ID is exactly \"calls\"\n" +
+        "• Attributes: callerId, receiverId, callerName, type, status (+ optional callerAvatar, offer, answer, callerIce, receiverIce)\n" +
+        "• Permissions: Users → Create, Read, Update"
+      );
+    }
+  };
+
 
   const endRef = useRef(null);
 
@@ -453,8 +529,20 @@ const Chat = () => {
           </div>
         </div>
         <div className="icons">
-          <img src="./phone.png" alt="" />
-          <img src="./video.png" alt="" />
+          <img
+            src="./phone.png"
+            alt="Voice call"
+            title="Start voice call"
+            style={{ cursor: "pointer" }}
+            onClick={() => handleCall("audio")}
+          />
+          <img
+            src="./video.png"
+            alt="Video call"
+            title="Start video call"
+            style={{ cursor: "pointer" }}
+            onClick={() => handleCall("video")}
+          />
           <img src="./info.png" alt="" onClick={toggleDetail} style={{ cursor: "pointer" }} />
         </div>
       </div>

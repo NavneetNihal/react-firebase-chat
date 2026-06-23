@@ -7,6 +7,7 @@ export const appwriteConfig = {
     usersCollectionId: import.meta.env.VITE_APPWRITE_USERS_COLLECTION_ID,
     chatsCollectionId: import.meta.env.VITE_APPWRITE_CHATS_COLLECTION_ID,
     userchatsCollectionId: import.meta.env.VITE_APPWRITE_USERCHATS_COLLECTION_ID,
+    callsCollectionId: import.meta.env.VITE_APPWRITE_CALLS_COLLECTION_ID,
     bucketId: import.meta.env.VITE_APPWRITE_BUCKET_ID,
 };
 

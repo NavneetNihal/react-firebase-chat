@@ -49,6 +49,14 @@ An elegant, real-time chat application built with **React**, **Vite**, and **App
   - The detail/info panel on the right
 - Avatar updates immediately in the sidebar via Zustand local state patch (no full re-fetch required).
 
+### 📞 Calling & Video Calling
+- **Free WebRTC Core** — Audio and video calling powered by WebRTC (Google STUN servers), no third-party paid SDKs required.
+- **Signaling over Appwrite** — Realtime socket subscription manages offer, answer, and ICE candidate synchronization.
+- **Pulsing Outgoing Ring** — Dynamic avatar rings pulse visually during the "Calling..." phase.
+- **Answer/Decline Banner** — Slide-down banner notifies receivers with live audio/video state.
+- **Local video PiP** — Floating picture-in-picture stream for your own camera.
+- **Mute/Camera control** — Full control bar allowing you to toggle microphone and webcam feed in real time.
+
 ### 📱 Mobile Responsive
 - Full mobile-first layout using CSS media queries and dynamic class toggling.
 - On mobile: the chat list, chat window, and detail panel stack into a single-panel view with back navigation.
@@ -116,6 +124,13 @@ An elegant, real-time chat application built with **React**, **Vite**, and **App
 
 ---
 
+### 8. WebRTC Signaling via Appwrite Realtime Subscriptions
+**Problem:** Setting up a WebRTC call usually requires a separate Node/Socket.io backend for ICE & SDP exchange.
+
+**Solution:** Leveraging Appwrite's Realtime collection channel. When a call is initiated, the caller creates a document in a `calls` collection containing the session SDP. The receiver accepts, generates an answer SDP, and updates the document. Both sides push ICE candidates to the database as debounced JSON arrays, which are received instantly via Realtime events and applied locally.
+
+---
+
 ## Appwrite Schema Requirements
 
 ### `users` collection attributes
@@ -137,6 +152,20 @@ An elegant, real-time chat application built with **React**, **Vite**, and **App
 | Key | Type | Notes |
 |---|---|---|
 | `chats` | String[] | JSON-serialized chat metadata |
+
+### `calls` collection attributes
+| Key | Type | Required | Notes |
+|---|---|---|---|
+| `callerId` | String | ✅ Yes | 36 chars |
+| `receiverId` | String | ✅ Yes | 36 chars |
+| `callerName` | String | ✅ Yes | 100 chars |
+| `callerAvatar` | String | No | 500 chars |
+| `type` | String | ✅ Yes | 10 chars |
+| `status` | String | ✅ Yes | 20 chars |
+| `offer` | String | No | 10000 chars (SDP Offer) |
+| `answer` | String | No | 10000 chars (SDP Answer) |
+| `callerIce` | String | No | 10000 chars (ICE list) |
+| `receiverIce` | String | No | 10000 chars (ICE list) |
 
 ### Storage Bucket
 One bucket for all files. Per-file RBAC permissions are injected at upload time.
@@ -166,13 +195,19 @@ One bucket for all files. Per-file RBAC permissions are injected at upload time.
    VITE_APPWRITE_CHATS_COLLECTION_ID=your_chats_collection_id
    VITE_APPWRITE_USERCHATS_COLLECTION_ID=your_userchats_collection_id
    VITE_APPWRITE_BUCKET_ID=your_bucket_id
+   VITE_APPWRITE_CALLS_COLLECTION_ID=calls
    ```
 
 4. **Add `status` attribute to your Appwrite `users` collection**
    - Appwrite Console → Databases → your DB → `users` collection → Attributes → Create attribute → String
    - Key: `status`, Size: `255`, Required: No, Default: `Available`
 
-5. **Run the dev server**
+5. **Create the `calls` collection & attributes in Appwrite**
+   - Create a collection named `calls`.
+   - Add the fields specified in the **`calls` collection attributes** table above.
+   - Go to settings and add permissions for `Users` (Create, Read, Update).
+
+6. **Run the dev server**
    ```bash
    npm run dev
    ```
@@ -181,3 +216,4 @@ One bucket for all files. Per-file RBAC permissions are injected at upload time.
 
 ## License
 MIT
+
