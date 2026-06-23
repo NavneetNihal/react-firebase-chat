@@ -565,6 +565,21 @@
                 gap: 10px;
             }
             
+            .emoji .picker {
+                position: fixed;
+                bottom: 75px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 9999;
+
+                .EmojiPickerReact {
+                    width: 280px !important;
+                    height: 320px !important;
+                    --epr-picker-height: 320px !important;
+                    --epr-picker-width: 280px !important;
+                }
+            }
+
             .sendButton {
                 padding: 8px 15px;
             }
