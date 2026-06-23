@@ -1,7 +1,8 @@
 .chat {
     flex: 2;
-    border-left: 1px solid #dddddd35;
-    border-right: 1px solid #dddddd35;
+    border-left: none;
+    border-right: none;
+    box-shadow: 4px 0 16px rgba(81, 131, 254, 0.35);
     height: 100%;
     display: flex;
     flex-direction: column;
