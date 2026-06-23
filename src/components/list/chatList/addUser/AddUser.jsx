@@ -141,7 +141,7 @@ const AddUser = ({ setAddMode }) => {
       </form>
       {user && (
         <div className="user">
-          <div className="detail">
+          <div className="addUserDetail">
             <img src={user.avatar || "./avatar.png"} alt="" />
             <span>{user.username}</span>
           </div>

@@ -235,7 +235,9 @@ const ChatList = () => {
             key={chat.chatId}
             onClick={() => handleSelect(chat)}
             style={{
-              backgroundColor: chat?.isSeen ? "transparent" : "rgba(81, 131, 254, 0.15)",
+              backgroundColor: chat.chatId === chatId 
+                ? "rgba(255, 255, 255, 0.08)" 
+                : (chat?.isSeen ? "transparent" : "rgba(81, 131, 254, 0.15)"),
             }}
           >
             <img

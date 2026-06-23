@@ -38,9 +38,9 @@
         margin-top: 50px;
         display: flex;
         align-items: center;
-        justify-self: space-between;
+        justify-content: space-between;
 
-        .detail{
+        .addUserDetail{
             display: flex;
             align-items: center;
             gap: 20px;
