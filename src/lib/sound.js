@@ -4,6 +4,13 @@ let isUnlocked = false;
 export const initAndUnlockAudio = () => {
   if (typeof window === "undefined" || notificationAudio) return;
 
+  if (!document.body) {
+    document.addEventListener("DOMContentLoaded", () => {
+      initAndUnlockAudio();
+    });
+    return;
+  }
+
   // Locate or create a hidden audio element in the DOM
   let audioEl = document.getElementById("notification-sound-element");
   if (!audioEl) {
