@@ -121,26 +121,22 @@ body {
   }
 
   /* When chat is active, show only chat, hide list and detail */
-  .container.chat-active {
-    .list {
-      display: none !important;
-    }
-    .chat {
-      display: flex !important;
-      flex: 1;
-      width: 100% !important;
-    }
+  .container.chat-active .list {
+    display: none !important;
+  }
+  .container.chat-active .chat {
+    display: flex !important;
+    flex: 1;
+    width: 100% !important;
   }
 
   /* When detail is active, show only detail, hide list and chat */
-  .container.chat-active.detail-active {
-    .chat {
-      display: none !important;
-    }
-    .detail {
-      display: flex !important;
-      flex: 1;
-      width: 100% !important;
-    }
+  .container.chat-active.detail-active .chat {
+    display: none !important;
+  }
+  .container.chat-active.detail-active .detail {
+    display: flex !important;
+    flex: 1;
+    width: 100% !important;
   }
 }

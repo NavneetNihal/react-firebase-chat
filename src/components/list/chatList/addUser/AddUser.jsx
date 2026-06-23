@@ -37,13 +37,15 @@ const AddUser = ({ setAddMode }) => {
     if (isAdding) return;
     setIsAdding(true);
 
+    const currentUserId = currentUser?.$id || currentUser?.id;
+
     try {
       // BLOCK 2: CHECK IF CHAT ALREADY EXISTS
       // Fetch your current chat list to check for duplicates
       const myChatsDoc = await databases.getDocument(
         appwriteConfig.databaseId,
         appwriteConfig.userchatsCollectionId,
-        currentUser.id,
+        currentUserId,
       );
 
       const myParsedChats = myChatsDoc.chats.map((c) => JSON.parse(c));
@@ -79,7 +81,7 @@ const AddUser = ({ setAddMode }) => {
       const friendChatPointer = JSON.stringify({
         chatId: newChatId,
         lastMessage: "",
-        receiverId: currentUser.id,
+        receiverId: currentUserId,
         updatedAt: Date.now(),
       });
 
@@ -115,7 +117,7 @@ const AddUser = ({ setAddMode }) => {
       await databases.updateDocument(
         appwriteConfig.databaseId,
         appwriteConfig.userchatsCollectionId,
-        currentUser.id,
+        currentUserId,
         { chats: updatedMyChats },
       );
 

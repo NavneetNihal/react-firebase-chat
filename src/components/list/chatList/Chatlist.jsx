@@ -79,6 +79,9 @@ const ChatList = () => {
   }, [currentUser?.$id, currentUser?.id]);
 
   const handleSelect = async (chat) => {
+    // 1. Immediately change the chat in UI for an instant mobile response
+    changeChat(chat.chatId, chat.user);
+
     const userChats = chats.map((item) => {
       const { user, ...rest } = item;
       return rest;
@@ -103,7 +106,6 @@ const ChatList = () => {
             chats: stringifiedChats,
           }
         );
-        changeChat(chat.chatId, chat.user);
       } catch (err) {
         console.log("Error updating isSeen in Appwrite:", err);
       }
