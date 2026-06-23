@@ -5,12 +5,16 @@ import { databases, appwriteConfig } from "../../../lib/appwrite";
 import { Permission, Role } from "appwrite";
 import upload from "../../../lib/upload";
 import { toast } from "react-toastify";
+import { playSoundEffect } from "../../../lib/sound";
 
 const Userinfo = () => {
   const { currentUser, fetchUserInfo, updateCurrentUser } = useUserStore();
   const [openEdit, setOpenEdit] = useState(false);
   const [loading, setLoading] = useState(false);
   const [newAvatar, setNewAvatar] = useState({ file: null, url: "" });
+  const [soundSetting, setSoundSetting] = useState(
+    () => (typeof window !== "undefined" && localStorage.getItem("notificationSoundSetting")) || "oof"
+  );
 
   const handleAvatarChange = (e) => {
     if (e.target.files[0]) {
@@ -29,6 +33,10 @@ const Userinfo = () => {
     const username = (formData.get("username") || "").trim() || currentUser.username;
     const status   = (formData.get("status")   || "").trim();
     const currentUserId = currentUser?.$id || currentUser?.id;
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("notificationSoundSetting", soundSetting);
+    }
 
     try {
       // ── Step 1: upload new avatar if user picked one ──────────────────
@@ -162,6 +170,38 @@ const Userinfo = () => {
                   placeholder="e.g. Available, Busy, In a meeting"
                   defaultValue={currentUser.status || ""}
                 />
+              </div>
+
+              <div className="inputGroup">
+                <label>Notification Sound</label>
+                <div className="soundOptions">
+                  {[
+                    { id: "chime", label: "Subtle Chime (Classic)" },
+                    { id: "trombone", label: "Sad Trombone (Roast/Fail)" },
+                    { id: "buzzer", label: "Wrong Buzzer (Roast/Error)" },
+                    { id: "oof", label: "Gaming 'Oof' (Subtle/Funny)" },
+                    { id: "laser", label: "Arcade Laser (Retro/Sarcastic)" }
+                  ].map((opt) => (
+                    <div key={opt.id} className="soundOptionRow">
+                      <input
+                        type="radio"
+                        id={`sound-${opt.id}`}
+                        name="soundSetting"
+                        value={opt.id}
+                        checked={soundSetting === opt.id}
+                        onChange={(e) => setSoundSetting(e.target.value)}
+                      />
+                      <label htmlFor={`sound-${opt.id}`}>{opt.label}</label>
+                      <button
+                        type="button"
+                        className="playPreviewBtn"
+                        onClick={() => playSoundEffect(opt.id)}
+                      >
+                        🔊 Play
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="modalActions">
