@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Query } from "appwrite";
 import { account, client, databases, appwriteConfig } from "./lib/appwrite";
 import Chat from "./components/chat/Chat";
 import Detail from "./components/detail/Detail";
@@ -28,8 +29,59 @@ const App = () => {
     checkUser();
   }, [fetchUserInfo]);
 
-  // ── Listen for incoming calls ────────────────────────────────────────
-  // Subscribe to the entire calls collection and filter by receiverId
+  // ── Resilient missed calls checking (poll + focus sync) ──────────────
+  useEffect(() => {
+    if (!currentUser || !appwriteConfig.callsCollectionId) return;
+    const currentUserId = currentUser.$id || currentUser.id;
+
+    const checkActiveCalls = async () => {
+      const { callState: activeCallState } = useCallStore.getState();
+      if (activeCallState !== "idle") return;
+
+      try {
+        const response = await databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.callsCollectionId,
+          [
+            Query.equal("receiverId", currentUserId),
+            Query.equal("status", "calling"),
+            Query.orderDesc("$createdAt"),
+            Query.limit(1)
+          ]
+        );
+
+        if (response.documents.length > 0) {
+          const doc = response.documents[0];
+          const docTime = new Date(doc.$createdAt).getTime();
+          const now = Date.now();
+          // Only trigger if document was created in the last 45 seconds
+          if (now - docTime < 45000) {
+            initIncoming(doc.$id, doc.type, {
+              id: doc.callerId,
+              name: doc.callerName,
+              avatar: doc.callerAvatar || "",
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Failed checking missed calls:", err.message);
+      }
+    };
+
+    checkActiveCalls();
+
+    const handleFocus = () => checkActiveCalls();
+    window.addEventListener("focus", handleFocus);
+
+    const interval = setInterval(checkActiveCalls, 4000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(interval);
+    };
+  }, [currentUser, initIncoming]);
+
+  // ── Listen for incoming calls via Realtime subscription ───────────────
   useEffect(() => {
     if (!currentUser || !appwriteConfig.callsCollectionId) return;
     const currentUserId = currentUser.$id || currentUser.id;

@@ -9,6 +9,122 @@ const RTC_CONFIG = {
   ],
 };
 
+// ─────────────────────────────────────────────────────────────────────────
+// Web Audio API Ringtone Synthesizer
+// 0kb footprint, CORS-free, offline-ready calling sounds
+// ─────────────────────────────────────────────────────────────────────────
+class RingtoneManager {
+  constructor() {
+    this.ctx = null;
+    this.osc1 = null;
+    this.osc2 = null;
+    this.gain = null;
+    this.interval = null;
+  }
+
+  startIncoming() {
+    this.stop();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    this.ctx = new AudioContextClass();
+
+    const playRing = () => {
+      if (!this.ctx || this.ctx.state === "closed") return;
+      if (this.ctx.state === "suspended") {
+        this.ctx.resume().catch(() => {});
+      }
+      
+      this.osc1 = this.ctx.createOscillator();
+      this.osc2 = this.ctx.createOscillator();
+      this.gain = this.ctx.createGain();
+
+      this.osc1.type = "sine";
+      this.osc1.frequency.setValueAtTime(440, this.ctx.currentTime); 
+      this.osc2.type = "sine";
+      this.osc2.frequency.setValueAtTime(480, this.ctx.currentTime); 
+
+      this.gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      this.gain.gain.linearRampToValueAtTime(0.2, this.ctx.currentTime + 0.1);
+      this.gain.gain.setValueAtTime(0.2, this.ctx.currentTime + 1.2);
+      this.gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.4);
+
+      this.osc1.connect(this.gain);
+      this.osc2.connect(this.gain);
+      this.gain.connect(this.ctx.destination);
+
+      this.osc1.start();
+      this.osc2.start();
+
+      setTimeout(() => {
+        try {
+          this.osc1?.stop();
+          this.osc2?.stop();
+        } catch {}
+      }, 1500);
+    };
+
+    playRing();
+    this.interval = setInterval(playRing, 3000);
+  }
+
+  startOutgoing() {
+    this.stop();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    this.ctx = new AudioContextClass();
+
+    const playRingback = () => {
+      if (!this.ctx || this.ctx.state === "closed") return;
+      if (this.ctx.state === "suspended") {
+        this.ctx.resume().catch(() => {});
+      }
+
+      this.osc1 = this.ctx.createOscillator();
+      this.gain = this.ctx.createGain();
+
+      this.osc1.type = "sine";
+      this.osc1.frequency.setValueAtTime(400, this.ctx.currentTime);
+
+      this.gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      this.gain.gain.linearRampToValueAtTime(0.08, this.ctx.currentTime + 0.1);
+      this.gain.gain.setValueAtTime(0.08, this.ctx.currentTime + 1.5);
+      this.gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.8);
+
+      this.osc1.connect(this.gain);
+      this.gain.connect(this.ctx.destination);
+
+      this.osc1.start();
+
+      setTimeout(() => {
+        try {
+          this.osc1?.stop();
+        } catch {}
+      }, 2000);
+    };
+
+    playRingback();
+    this.interval = setInterval(playRingback, 4000);
+  }
+
+  stop() {
+    clearInterval(this.interval);
+    this.interval = null;
+    try {
+      this.osc1?.stop();
+      this.osc2?.stop();
+    } catch {}
+    this.osc1 = null;
+    this.osc2 = null;
+    if (this.ctx && this.ctx.state !== "closed") {
+      this.ctx.close();
+    }
+    this.ctx = null;
+  }
+}
+
+const ringtone = new RingtoneManager();
+
+
 const formatTime = (s) =>
   `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
@@ -347,6 +463,19 @@ const CallOverlay = () => {
     localStreamRef.current?.getVideoTracks().forEach((t) => { t.enabled = !t.enabled; });
     setIsCamOff((p) => !p);
   };
+
+  useEffect(() => {
+    if (callState === "incoming") {
+      ringtone.startIncoming();
+    } else if (callState === "outgoing") {
+      ringtone.startOutgoing();
+    } else {
+      ringtone.stop();
+    }
+    return () => {
+      ringtone.stop();
+    };
+  }, [callState]);
 
   useEffect(() => () => cleanup(), [cleanup]);
 
