@@ -1,9 +1,41 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import useUserStore from "../../../lib/userStore";
 import { useChatStore } from "../../../lib/chatStore";
 import { databases, client, appwriteConfig } from "../../../lib/appwrite"; 
 import "./chatList.css";
 import AddUser from "./addUser/AddUser";
+
+const playNotificationSound = () => {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    
+    const playBeep = (freq, time, duration) => {
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, time);
+      
+      gainNode.gain.setValueAtTime(0, time);
+      gainNode.gain.linearRampToValueAtTime(0.12, time + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
+      
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      osc.start(time);
+      osc.stop(time + duration);
+    };
+    
+    const now = ctx.currentTime;
+    playBeep(587.33, now, 0.12);
+    playBeep(880.00, now + 0.06, 0.18);
+  } catch (err) {
+    console.warn("Could not play notification sound:", err);
+  }
+};
 
 const ChatList = () => {
   const [chats, setChats] = useState([]);
@@ -11,6 +43,11 @@ const ChatList = () => {
   const [input, setInput] = useState("");
   const { currentUser } = useUserStore();
   const { chatId, changeChat, resetChat } = useChatStore();
+
+  const chatsRef = useRef([]);
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
 
   useEffect(() => {
     // Prevent running if user isn't fully loaded yet
@@ -68,7 +105,28 @@ const ChatList = () => {
     
     const unSub = client.subscribe(channel, async (response) => {
       if (response.events.some((e) => e.includes(".update")) || response.events.some((e) => e.includes(".create"))) {
-        const newProcessedChats = await processChats(response.payload.chats);
+        const payloadChats = response.payload.chats || [];
+        const newProcessedChats = await processChats(payloadChats);
+
+        // Check if there is a new unread message in a chat other than the currently active one
+        let shouldAlert = false;
+        for (const itemString of payloadChats) {
+          try {
+            const incoming = typeof itemString === "string" ? JSON.parse(itemString) : itemString;
+            if (incoming && !incoming.isSeen && incoming.chatId !== useChatStore.getState().chatId) {
+              const existing = chatsRef.current.find((c) => c.chatId === incoming.chatId);
+              if (!existing || incoming.updatedAt > existing.updatedAt) {
+                shouldAlert = true;
+                break;
+              }
+            }
+          } catch {}
+        }
+
+        if (shouldAlert) {
+          playNotificationSound();
+        }
+
         setChats(newProcessedChats);
       }
     });
