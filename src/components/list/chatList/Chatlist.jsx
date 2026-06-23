@@ -10,35 +10,31 @@ const playNotificationSound = () => {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
     const ctx = new AudioContextClass();
-
-    const startAudio = () => {
-      const playBeep = (freq, time, duration) => {
-        const osc = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-        
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, time);
-        
-        gainNode.gain.setValueAtTime(0, time);
-        gainNode.gain.linearRampToValueAtTime(0.12, time + 0.02);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
-        
-        osc.connect(gainNode);
-        gainNode.connect(ctx.destination);
-        
-        osc.start(time);
-        osc.stop(time + duration);
-      };
+    
+    const playBeep = (freq, time, duration) => {
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
       
-      const now = ctx.currentTime;
-      playBeep(587.33, now, 0.12);
-      playBeep(880.00, now + 0.06, 0.18);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, time);
+      
+      gainNode.gain.setValueAtTime(0, time);
+      gainNode.gain.linearRampToValueAtTime(0.12, time + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
+      
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      osc.start(time);
+      osc.stop(time + duration);
     };
+    
+    const now = ctx.currentTime;
+    playBeep(587.33, now, 0.12);
+    playBeep(880.00, now + 0.06, 0.18);
 
     if (ctx.state === "suspended") {
-      ctx.resume().then(startAudio).catch((err) => console.warn("Failed to resume AudioContext:", err));
-    } else {
-      startAudio();
+      ctx.resume().catch(() => {});
     }
   } catch (err) {
     console.warn("Could not play notification sound:", err);
