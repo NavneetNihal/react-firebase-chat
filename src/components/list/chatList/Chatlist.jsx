@@ -10,28 +10,36 @@ const playNotificationSound = () => {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
     const ctx = new AudioContextClass();
-    
-    const playBeep = (freq, time, duration) => {
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
+
+    const startAudio = () => {
+      const playBeep = (freq, time, duration) => {
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, time);
+        
+        gainNode.gain.setValueAtTime(0, time);
+        gainNode.gain.linearRampToValueAtTime(0.12, time + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        osc.start(time);
+        osc.stop(time + duration);
+      };
       
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, time);
-      
-      gainNode.gain.setValueAtTime(0, time);
-      gainNode.gain.linearRampToValueAtTime(0.12, time + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
-      
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      
-      osc.start(time);
-      osc.stop(time + duration);
+      const now = ctx.currentTime;
+      playBeep(587.33, now, 0.12);
+      playBeep(880.00, now + 0.06, 0.18);
     };
-    
-    const now = ctx.currentTime;
-    playBeep(587.33, now, 0.12);
-    playBeep(880.00, now + 0.06, 0.18);
+
+    if (ctx.state === "suspended") {
+      ctx.resume().then(startAudio).catch((err) => console.warn("Failed to resume AudioContext:", err));
+    } else {
+      startAudio();
+    }
   } catch (err) {
     console.warn("Could not play notification sound:", err);
   }
@@ -115,7 +123,13 @@ const ChatList = () => {
             const incoming = typeof itemString === "string" ? JSON.parse(itemString) : itemString;
             if (incoming && !incoming.isSeen && incoming.chatId !== useChatStore.getState().chatId) {
               const existing = chatsRef.current.find((c) => c.chatId === incoming.chatId);
-              if (!existing || incoming.updatedAt > existing.updatedAt) {
+              if (
+                !existing || 
+                !existing.updatedAt || 
+                incoming.updatedAt > existing.updatedAt || 
+                incoming.lastMessage !== existing.lastMessage
+              ) {
+                console.log("New message incoming for chat:", incoming.chatId, "playing alert...");
                 shouldAlert = true;
                 break;
               }
