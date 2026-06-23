@@ -56,6 +56,43 @@ const ChatList = () => {
       return chatData.sort((a, b) => b.updatedAt - a.updatedAt);
     };
 
+    const healTypingStatus = async (rawChats) => {
+      if (!rawChats || rawChats.length === 0) return;
+      for (const itemString of rawChats) {
+        try {
+          const item = typeof itemString === "string" ? JSON.parse(itemString) : itemString;
+          const otherUserId = item.receiverId;
+          const chatId = item.chatId;
+          
+          const otherDoc = await databases.getDocument(
+            appwriteConfig.databaseId,
+            appwriteConfig.userchatsCollectionId,
+            otherUserId
+          );
+          if (otherDoc?.chats) {
+            const parsed = otherDoc.chats.map((c) => {
+              try { return typeof c === "string" ? JSON.parse(c) : c; }
+              catch { return null; }
+            }).filter(Boolean);
+            
+            const idx = parsed.findIndex((c) => c.chatId === chatId);
+            if (idx !== -1 && parsed[idx].typing) {
+              parsed[idx].typing = false;
+              await databases.updateDocument(
+                appwriteConfig.databaseId,
+                appwriteConfig.userchatsCollectionId,
+                otherUserId,
+                { chats: parsed.map((c) => JSON.stringify(c)) }
+              );
+              console.log(`Self-healed stuck typing status for chat ${chatId} with user ${otherUserId}`);
+            }
+          }
+        } catch (e) {
+          console.warn("Self-heal typing failed for a chat:", e.message);
+        }
+      }
+    };
+
     const getInitialChats = async () => {
       try {
         const doc = await databases.getDocument(
@@ -68,6 +105,7 @@ const ChatList = () => {
 
         const processedChats = await processChats(doc.chats);
         setChats(processedChats);
+        healTypingStatus(doc.chats);
       } catch (error) {
         console.log("Error fetching initial chats:", error);
       }

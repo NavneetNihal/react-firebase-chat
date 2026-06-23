@@ -216,6 +216,7 @@ const Chat = () => {
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
   const isTypingRef = useRef(false);
+  const activeChatRef = useRef({ chatId, userId: user?.$id || user?.id });
 
   // ── Initiate a call ────────────────────────────────────────────────
   const handleCall = async (type) => {
@@ -379,12 +380,52 @@ const Chat = () => {
   }, [chatId, currentUser]);
 
   useEffect(() => {
+    const prev = activeChatRef.current;
+    return () => {
+      if (prev.chatId && prev.userId && isTypingRef.current) {
+        const prevChatId = prev.chatId;
+        const prevUserId = prev.userId;
+        const turnOffTyping = async () => {
+          try {
+            const doc = await databases.getDocument(
+              appwriteConfig.databaseId,
+              appwriteConfig.userchatsCollectionId,
+              prevUserId
+            );
+            if (doc?.chats) {
+              const parsed = doc.chats.map((c) => {
+                try { return typeof c === "string" ? JSON.parse(c) : c; }
+                catch { return null; }
+              }).filter(Boolean);
+              const idx = parsed.findIndex((c) => c.chatId === prevChatId);
+              if (idx !== -1 && parsed[idx].typing) {
+                parsed[idx].typing = false;
+                await databases.updateDocument(
+                  appwriteConfig.databaseId,
+                  appwriteConfig.userchatsCollectionId,
+                  prevUserId,
+                  { chats: parsed.map((c) => JSON.stringify(c)) }
+                );
+                console.log("Turned off typing for previous chat:", prevChatId);
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to reset typing status on unmount/swap:", e);
+          }
+        };
+        turnOffTyping();
+      }
+    };
+  }, [chatId, user]);
+
+  useEffect(() => {
+    activeChatRef.current = { chatId, userId: user?.$id || user?.id };
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
     }
     isTypingRef.current = false;
-  }, [chatId]);
+  }, [chatId, user]);
 
   const updateTypingStatus = async (typingVal) => {
     const otherUserId = user?.$id || user?.id;
