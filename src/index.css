@@ -89,6 +89,12 @@ body {
 }
 
 @media (max-width: 768px) {
+  html, body {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
   body {
     align-items: flex-start;
     justify-content: flex-start;
@@ -97,6 +103,7 @@ body {
   .container {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     border: none;
     border-radius: 0;
     /* Pulsing framing edge glow on mobile screen */
