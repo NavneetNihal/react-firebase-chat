@@ -5,51 +5,11 @@ import { databases, client, appwriteConfig } from "../../../lib/appwrite";
 import "./chatList.css";
 import AddUser from "./addUser/AddUser";
 
-let notificationAudio = null;
-let isAudioUnlocked = false;
-
-const initAudio = () => {
-  if (notificationAudio) return;
-  notificationAudio = new Audio("/notification.mp3");
-  notificationAudio.preload = "auto";
-};
-
-const unlockAudio = () => {
-  initAudio();
-  if (isAudioUnlocked || !notificationAudio) return;
-  
-  notificationAudio.volume = 0;
-  notificationAudio.play().then(() => {
-    isAudioUnlocked = true;
-    console.log("Audio system unlocked via user gesture.");
-    document.removeEventListener("click", unlockAudio);
-    document.removeEventListener("keydown", unlockAudio);
-    document.removeEventListener("touchstart", unlockAudio);
-  }).catch(() => {
-    // Keep trying on subsequent gestures if blocked
-  });
-};
+import { initAndUnlockAudio, playNotificationSound } from "../../../lib/sound";
 
 if (typeof window !== "undefined") {
-  document.addEventListener("click", unlockAudio);
-  document.addEventListener("keydown", unlockAudio);
-  document.addEventListener("touchstart", unlockAudio);
+  initAndUnlockAudio();
 }
-
-const playNotificationSound = () => {
-  try {
-    initAudio();
-    if (notificationAudio) {
-      notificationAudio.volume = 0.5;
-      notificationAudio.currentTime = 0;
-      notificationAudio.play().catch((err) => {
-        console.warn("Could not autoplay notification sound:", err.message);
-      });
-    }
-  } catch (err) {
-    console.warn("Could not play notification sound:", err);
-  }
-};
 
 const ChatList = () => {
   const [chats, setChats] = useState([]);
