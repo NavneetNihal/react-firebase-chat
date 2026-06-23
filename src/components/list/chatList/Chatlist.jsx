@@ -117,7 +117,11 @@ const ChatList = () => {
         for (const itemString of payloadChats) {
           try {
             const incoming = typeof itemString === "string" ? JSON.parse(itemString) : itemString;
-            if (incoming && !incoming.isSeen && incoming.chatId !== useChatStore.getState().chatId) {
+            if (
+              incoming && 
+              !incoming.isSeen && 
+              (incoming.chatId !== useChatStore.getState().chatId || document.hidden || !document.hasFocus())
+            ) {
               const existing = chatsRef.current.find((c) => c.chatId === incoming.chatId);
               if (
                 !existing || 
@@ -322,7 +326,9 @@ const ChatList = () => {
                   ? "User"
                   : chat.user?.username || "Unknown User"}
               </span>
-              <p>{chat.lastMessage}</p>
+              <p style={{ color: chat.typing ? "#8bb2ff" : "#e0e0e0", fontWeight: chat.typing ? "bold" : "300" }}>
+                {chat.typing ? "💬 Typing..." : chat.lastMessage}
+              </p>
             </div>
             <button className="deleteBtn" onClick={(e) => handleDelete(e, chat.chatId, chat.receiverId)}>Delete</button>
           </div>

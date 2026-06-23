@@ -213,6 +213,10 @@ const Chat = () => {
   const { chatId, user, isCurrentUserBlocked, isReceiverBlocked, toggleDetail, resetChat } = useChatStore();
   const { callState, initiateOutgoing } = useCallStore();
 
+  const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
+  const typingTimeoutRef = useRef(null);
+  const isTypingRef = useRef(false);
+
   // ── Initiate a call ────────────────────────────────────────────────
   const handleCall = async (type) => {
     if (!user || isCurrentUserBlocked || isReceiverBlocked) return;
@@ -330,8 +334,107 @@ const Chat = () => {
         audioContextRef.current.close();
       }
       if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   }, []);
+
+  // Listen to other user's typing status (which is updated inside our userchats document)
+  useEffect(() => {
+    const currentUserId = currentUser?.$id || currentUser?.id;
+    if (!currentUserId || !chatId) return;
+
+    const loadInitialTyping = async () => {
+      try {
+        const doc = await databases.getDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.userchatsCollectionId,
+          currentUserId
+        );
+        if (doc?.chats) {
+          const parsed = doc.chats.map((c) => {
+            try { return typeof c === "string" ? JSON.parse(c) : c; }
+            catch { return null; }
+          }).filter(Boolean);
+          const activeChat = parsed.find((c) => c.chatId === chatId);
+          setIsOtherUserTyping(!!activeChat?.typing);
+        }
+      } catch {}
+    };
+    loadInitialTyping();
+
+    const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.userchatsCollectionId}.documents.${currentUserId}`;
+    const unsub = client.subscribe(channel, (res) => {
+      const doc = res.payload;
+      if (doc?.chats) {
+        const parsed = doc.chats.map((c) => {
+          try { return typeof c === "string" ? JSON.parse(c) : c; }
+          catch { return null; }
+        }).filter(Boolean);
+        const activeChat = parsed.find((c) => c.chatId === chatId);
+        setIsOtherUserTyping(!!activeChat?.typing);
+      }
+    });
+
+    return () => unsub();
+  }, [chatId, currentUser]);
+
+  useEffect(() => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    isTypingRef.current = false;
+  }, [chatId]);
+
+  const updateTypingStatus = async (typingVal) => {
+    const otherUserId = user?.$id || user?.id;
+    const currentUserId = currentUser?.$id || currentUser?.id;
+    if (!otherUserId || !chatId || !currentUserId) return;
+
+    try {
+      const doc = await databases.getDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.userchatsCollectionId,
+        otherUserId
+      );
+      if (doc?.chats) {
+        const parsed = doc.chats.map((c) => {
+          try { return typeof c === "string" ? JSON.parse(c) : c; }
+          catch { return null; }
+        }).filter(Boolean);
+
+        const idx = parsed.findIndex((c) => c.chatId === chatId);
+        if (idx !== -1) {
+          if (parsed[idx].typing === typingVal) return;
+          parsed[idx].typing = typingVal;
+          await databases.updateDocument(
+            appwriteConfig.databaseId,
+            appwriteConfig.userchatsCollectionId,
+            otherUserId,
+            { chats: parsed.map((c) => JSON.stringify(c)) }
+          );
+        }
+      }
+    } catch (err) {
+      console.warn("Error updating typing status:", err.message);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    setText(e.target.value);
+
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      updateTypingStatus(true);
+    }
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      updateTypingStatus(false);
+    }, 1800);
+  };
 
   const handleEmoji = (e) => setText((prev) => prev + e.emoji);
 
@@ -477,6 +580,10 @@ const Chat = () => {
     if (text === "" && !img.file) return;
     setOpen(false);
 
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    isTypingRef.current = false;
+    updateTypingStatus(false);
+
     // Save states locally for the background requests
     const messageText = text;
     const imgFile = img.file;
@@ -538,7 +645,9 @@ const Chat = () => {
           <img src={user?.avatar || "./avatar.png"} alt="" />
           <div className="texts">
             <span>{user?.username || "User"}</span>
-            <p>{user?.status || "Available"}</p>
+            <p style={{ color: isOtherUserTyping ? "#8bb2ff" : "#e0e0e0", fontWeight: isOtherUserTyping ? "bold" : "normal" }}>
+              {isOtherUserTyping ? "💬 typing..." : (user?.status || "Available")}
+            </p>
           </div>
         </div>
         <div className="icons">
@@ -653,7 +762,7 @@ const Chat = () => {
           type="text"
           placeholder={isBlocked ? "You cannot send a message" : "Type a message..."}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleInputChange}
           disabled={isBlocked}
         />
         <div className="emoji">
