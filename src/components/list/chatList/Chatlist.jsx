@@ -229,11 +229,11 @@ const ChatList = () => {
 
         return (
           <div
-            className="item"
+            className={`item ${chat.chatId === chatId ? "active" : ""}`}
             key={chat.chatId}
             onClick={() => handleSelect(chat)}
             style={{
-              backgroundColor: chat?.isSeen ? "transparent" : "#5183fe",
+              backgroundColor: chat?.isSeen ? "transparent" : "rgba(81, 131, 254, 0.25)",
             }}
           >
             <img

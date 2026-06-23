@@ -26,6 +26,7 @@
                 background-color: rgba(17, 25, 40, 0.6);
                 color: white;
                 border-radius: 5px;
+                font-size: 16px;
 
 
                   &:focus {
