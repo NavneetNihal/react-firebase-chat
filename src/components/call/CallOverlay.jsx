@@ -19,8 +19,10 @@ const CallOverlay = () => {
   const remoteVideoRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null);
   const iceBufferRef = useRef([]);
   const iceTimerRef = useRef(null);
+  const remoteIceQueueRef = useRef([]);
   const addedIceRef = useRef(new Set());
   const unsubRef = useRef(null);
   const durationRef = useRef(null);
@@ -40,9 +42,11 @@ const CallOverlay = () => {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     }
+    remoteStreamRef.current = null;
     clearTimeout(iceTimerRef.current);
     clearInterval(durationRef.current);
     iceBufferRef.current = [];
+    remoteIceQueueRef.current = [];
     addedIceRef.current = new Set();
     answerAppliedRef.current = false;
     setDuration(0);
@@ -50,6 +54,16 @@ const CallOverlay = () => {
     setCanAccept(false);
     setIsMuted(false);
     setIsCamOff(false);
+  }, []);
+
+  const processIceQueue = useCallback(async (pc) => {
+    if (!pc || !pc.remoteDescription) return;
+    try {
+      while (remoteIceQueueRef.current.length > 0) {
+        const candidate = remoteIceQueueRef.current.shift();
+        await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+      }
+    } catch {}
   }, []);
 
   const addIceCandidates = useCallback(async (pc, jsonStr) => {
@@ -60,7 +74,12 @@ const CallOverlay = () => {
         const key = JSON.stringify(candidate);
         if (addedIceRef.current.has(key)) continue;
         addedIceRef.current.add(key);
-        await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+
+        if (!pc.remoteDescription) {
+          remoteIceQueueRef.current.push(candidate);
+        } else {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+        }
       }
     } catch {}
   }, []);
@@ -111,7 +130,11 @@ const CallOverlay = () => {
     };
 
     pc.ontrack = (e) => {
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = e.streams[0];
+      remoteStreamRef.current = e.streams[0];
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = e.streams[0];
+        remoteVideoRef.current.play().catch(() => {});
+      }
       setRemoteReady(true);
     };
 
@@ -134,9 +157,29 @@ const CallOverlay = () => {
       video: type === "video" ? { width: 640, height: 480 } : false,
     });
     localStreamRef.current = stream;
-    if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+      localVideoRef.current.play().catch(() => {});
+    }
     return stream;
   };
+
+  // Sync streams when DOM components mount/update
+  useEffect(() => {
+    if (callState === "active" || callState === "outgoing") {
+      if (localVideoRef.current && localStreamRef.current && !localVideoRef.current.srcObject) {
+        localVideoRef.current.srcObject = localStreamRef.current;
+        localVideoRef.current.play().catch(() => {});
+      }
+    }
+  }, [callState, isCamOff]);
+
+  useEffect(() => {
+    if (remoteReady && remoteVideoRef.current && remoteStreamRef.current && !remoteVideoRef.current.srcObject) {
+      remoteVideoRef.current.srcObject = remoteStreamRef.current;
+      remoteVideoRef.current.play().catch(() => {});
+    }
+  }, [remoteReady, callState]);
 
   const subscribeCallDoc = useCallback((cid, initiator) => {
     const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.callsCollectionId}.documents.${cid}`;
@@ -155,6 +198,7 @@ const CallOverlay = () => {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(doc.answer)));
           answerAppliedRef.current = true;
+          await processIceQueue(pc);
         } catch (err) {
           console.warn("setRemoteDescription (answer):", err.message);
         }
@@ -168,7 +212,7 @@ const CallOverlay = () => {
         await addIceCandidates(pc, doc.receiverIce);
       }
     });
-  }, [addIceCandidates, cleanup, endCall]);
+  }, [addIceCandidates, processIceQueue, cleanup, endCall]);
 
   // Wait for caller offer + watch for caller cancel while incoming
   useEffect(() => {
@@ -248,6 +292,9 @@ const CallOverlay = () => {
 
   const handleAccept = async () => {
     if (!canAccept) return;
+    // Set active immediately to render callScreen and mount local/remote video tags
+    setActive();
+
     try {
       let doc = await databases.getDocument(
         appwriteConfig.databaseId,
@@ -272,6 +319,7 @@ const CallOverlay = () => {
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
 
       await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(doc.offer)));
+      await processIceQueue(pc);
       await addIceCandidates(pc, doc.callerIce);
 
       const answer = await pc.createAnswer();
@@ -301,6 +349,7 @@ const CallOverlay = () => {
   };
 
   useEffect(() => () => cleanup(), [cleanup]);
+
 
   if (callState === "idle") return null;
 
