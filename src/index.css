@@ -20,18 +20,49 @@ body {
   color: white;
 }
 
+@keyframes borderGlow {
+  0% {
+    box-shadow: 0 0 35px rgba(81, 131, 254, 0.25),
+                0 0 70px rgba(81, 131, 254, 0.15);
+    border-color: rgba(81, 131, 254, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 55px rgba(81, 131, 254, 0.45),
+                0 0 110px rgba(81, 131, 254, 0.25),
+                0 0 25px rgba(139, 178, 255, 0.2);
+    border-color: rgba(81, 131, 254, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 35px rgba(81, 131, 254, 0.25),
+                0 0 70px rgba(81, 131, 254, 0.15);
+    border-color: rgba(81, 131, 254, 0.3);
+  }
+}
+
+@keyframes mobileInsetGlow {
+  0% {
+    box-shadow: inset 0 0 20px rgba(81, 131, 254, 0.18);
+  }
+  50% {
+    box-shadow: inset 0 0 35px rgba(81, 131, 254, 0.35),
+                inset 0 0 15px rgba(139, 178, 255, 0.25);
+  }
+  100% {
+    box-shadow: inset 0 0 20px rgba(81, 131, 254, 0.18);
+  }
+}
+
 .container {
   width: 85vw;
   height: 90vh;
   background-color: rgba(17, 25, 40, 0.75);
   backdrop-filter: blur(19px) saturate(180%);
-  border: 1px solid rgba(81, 131, 254, 0.35);
+  border: 1px solid rgba(81, 131, 254, 0.3);
   border-radius: 20px;
   overflow: hidden;
   display: flex;
-  /* Dual-layer high-fidelity neon corner glow (like Gemini) */
-  box-shadow: 0 0 50px rgba(81, 131, 254, 0.25), 
-              0 0 100px rgba(81, 131, 254, 0.15);
+  /* Breathing neon corner glow animation */
+  animation: borderGlow 6s ease-in-out infinite;
 }
 
 .loading {
@@ -60,12 +91,14 @@ body {
     height: 100vh;
     border: none;
     border-radius: 0;
-    /* Edge glow for the active mobile screen */
-    box-shadow: inset 0 0 25px rgba(81, 131, 254, 0.18);
+    /* Pulsing framing edge glow on mobile screen */
+    animation: mobileInsetGlow 4s ease-in-out infinite;
   }
 
   /* By default, on mobile, show only list, hide chat and detail */
   .list {
+    border-right: none !important;
+    box-shadow: none !important;
     flex: 1;
     width: 100% !important;
     display: flex !important;
