@@ -7,10 +7,6 @@ import AddUser from "./addUser/AddUser";
 
 import { initAndUnlockAudio, playNotificationSound } from "../../../lib/sound";
 
-if (typeof window !== "undefined") {
-  initAndUnlockAudio();
-}
-
 const ChatList = () => {
   const [chats, setChats] = useState([]);
   const [addMode, setAddMode] = useState(false);
@@ -26,6 +22,9 @@ const ChatList = () => {
   useEffect(() => {
     // Prevent running if user isn't fully loaded yet
     if (!currentUser?.$id && !currentUser?.id) return;
+
+    // Ensure audio is unlocked after DOM is ready
+    initAndUnlockAudio();
 
     const currentUserId = currentUser?.$id || currentUser?.id;
 

@@ -1,251 +1,180 @@
-let notificationAudio = null;
-let audioCtx = null;
-let isUnlocked = false;
+// ─────────────────────────────────────────────────────────────────────────────
+// Notification Sound System
+// Single AudioContext shared across everything, properly awaited before use
+// ─────────────────────────────────────────────────────────────────────────────
 
-export const initAndUnlockAudio = () => {
-  if (typeof window === "undefined" || notificationAudio) return;
+let _ctx = null;            // the ONE AudioContext
+let _unlocked = false;      // whether user gesture has been received
 
-  if (!document.body) {
-    document.addEventListener("DOMContentLoaded", () => {
-      initAndUnlockAudio();
-    });
-    return;
-  }
+const getCtx = () => {
+  if (_ctx) return _ctx;
+  const Cls = window.AudioContext || window.webkitAudioContext;
+  if (!Cls) return null;
+  _ctx = new Cls();
+  return _ctx;
+};
 
-  // 1. Create/find HTML5 Audio element for the main chime
-  let audioEl = document.getElementById("notification-sound-element");
-  if (!audioEl) {
-    audioEl = document.createElement("audio");
-    audioEl.id = "notification-sound-element";
-    audioEl.src = "/notification.mp3";
-    audioEl.style.display = "none";
-    audioEl.preload = "auto";
-    document.body.appendChild(audioEl);
-  }
-  notificationAudio = audioEl;
-  notificationAudio.volume = 0.12; // Gentle low volume default
-
-  // 2. Create Web Audio API context
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (AudioContextClass) {
+// ── Ensure context is running; returns true if ready ─────────────────────────
+const ensureRunning = async () => {
+  const ctx = getCtx();
+  if (!ctx) return false;
+  if (ctx.state === "suspended") {
     try {
-      audioCtx = new AudioContextClass();
+      await ctx.resume();
     } catch (e) {
-      console.warn("Failed to initialize AudioContext:", e);
+      console.warn("[Sound] resume failed:", e);
+      return false;
     }
   }
+  return ctx.state === "running";
+};
 
-  const unlock = () => {
-    console.log("User gesture captured: unlocking audio system...");
-    
-    // Unlock HTML5 Audio
-    if (notificationAudio) {
-      notificationAudio.play()
-        .then(() => {
-          notificationAudio.pause();
-          notificationAudio.currentTime = 0;
-          isUnlocked = true;
-          console.log("HTML5 Audio element successfully unlocked.");
-        })
-        .catch((err) => {
-          console.warn("HTML5 Audio unlock attempt failed:", err);
-        });
+// ── Register capture-phase gesture listeners to unlock on first interaction ──
+export const initAndUnlockAudio = () => {
+  if (typeof window === "undefined" || _unlocked) return;
+
+  const unlock = async () => {
+    if (_unlocked) return;
+    const ready = await ensureRunning();
+    if (ready) {
+      _unlocked = true;
+      console.log("[Sound] AudioContext unlocked via user gesture.");
     }
-
-    // Unlock Web Audio Context
-    if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume()
-        .then(() => {
-          console.log("Web Audio Context successfully resumed/unlocked.");
-        })
-        .catch((err) => {
-          console.warn("Web Audio Context resume failed:", err);
-        });
-    }
-
-    // Clean up listeners after first user interaction
-    cleanup();
-  };
-
-  const cleanup = () => {
-    window.removeEventListener("click", unlock, true);
-    window.removeEventListener("keydown", unlock, true);
+    window.removeEventListener("click",      unlock, true);
+    window.removeEventListener("keydown",    unlock, true);
     window.removeEventListener("touchstart", unlock, true);
   };
 
-  // Register in the capturing phase (true) to run before any e.stopPropagation() in elements
-  window.addEventListener("click", unlock, true);
-  window.addEventListener("keydown", unlock, true);
+  window.addEventListener("click",      unlock, true);
+  window.addEventListener("keydown",    unlock, true);
   window.addEventListener("touchstart", unlock, true);
 };
 
-const playWebAudioChime = (ctx, now) => {
-  try {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(392.00, now); // G4 note
-    gain.gain.setValueAtTime(0.08, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.18);
-  } catch (err) {
-    console.warn("Chime fallback failed:", err);
-  }
-};
-
-export const playSoundEffect = (soundId) => {
+// ── Play a specific sound effect (ALL audio done through Web Audio API) ───────
+export const playSoundEffect = async (soundId) => {
   if (typeof window === "undefined") return;
 
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return;
-
-  if (!audioCtx) {
-    try {
-      audioCtx = new AudioContextClass();
-    } catch (e) {
-      console.warn("Failed to initialize AudioContext:", e);
-      return;
-    }
+  // Always try to ensure context is running first
+  const ready = await ensureRunning();
+  if (!ready) {
+    console.warn("[Sound] AudioContext not running, cannot play:", soundId);
+    return;
   }
 
-  if (audioCtx.state === "suspended") {
-    audioCtx.resume().catch(() => {});
-  }
-
-  const ctx = audioCtx;
+  const ctx = _ctx;
   const now = ctx.currentTime;
+  console.log("[Sound] Playing:", soundId, "at ctx time:", now, "state:", ctx.state);
 
   switch (soundId) {
-    case "chime": {
-      // Try HTML5 Audio element first for the premium .mp3 chime
-      if (notificationAudio) {
-        notificationAudio.currentTime = 0;
-        const playPromise = notificationAudio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              console.log("Played MP3 chime.");
-            })
-            .catch((err) => {
-              console.warn("HTML5 play rejected, falling back to Web Audio chime:", err);
-              playWebAudioChime(ctx, now);
-            });
-        }
-      } else {
-        playWebAudioChime(ctx, now);
-      }
+
+    case "oof": {
+      // Classic game-style 'oof' — quick rising pitch scoop, triangle wave
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(100, now);
+      osc.frequency.exponentialRampToValueAtTime(350, now + 0.10);
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.18);
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.setValueAtTime(0.22, now + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.22);
       break;
     }
+
+    case "chime": {
+      // Gentle sine chime
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.30);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.32);
+      break;
+    }
+
     case "trombone": {
-      // Sad Trombone: 4 descending notes (F4, E4, Eb4, D4) with pitch bend and filter
-      const notes = [349.23, 329.63, 311.13, 293.66];
-      notes.forEach((freq, idx) => {
-        const startTime = now + idx * 0.22;
-        const endTime = startTime + (idx === 3 ? 0.55 : 0.2);
-        
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+      // Sad trombone — 4 descending sawtooth notes
+      const notes = [349.23, 329.63, 311.13, 280.00];
+      notes.forEach((freq, i) => {
+        const t0 = now + i * 0.22;
+        const t1 = t0 + (i === 3 ? 0.55 : 0.20);
+        const osc    = ctx.createOscillator();
+        const gain   = ctx.createGain();
         const filter = ctx.createBiquadFilter();
-        
         osc.type = "sawtooth";
         filter.type = "lowpass";
-        
-        osc.frequency.setValueAtTime(freq, startTime);
-        osc.frequency.linearRampToValueAtTime(freq - 15, endTime);
-        filter.frequency.setValueAtTime(800, startTime);
-        
-        gain.gain.setValueAtTime(0.08, startTime);
-        gain.gain.linearRampToValueAtTime(0.08, endTime - 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, endTime);
-        
+        filter.frequency.setValueAtTime(900, t0);
+        osc.frequency.setValueAtTime(freq, t0);
+        osc.frequency.linearRampToValueAtTime(freq - 12, t1);
+        gain.gain.setValueAtTime(0.09, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t1);
         osc.connect(filter);
         filter.connect(gain);
         gain.connect(ctx.destination);
-        
-        osc.start(startTime);
-        osc.stop(endTime);
+        osc.start(t0);
+        osc.stop(t1 + 0.01);
       });
       break;
     }
+
     case "buzzer": {
-      // Dissonant low double sawtooth buzz
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const gain = ctx.createGain();
+      // Dissonant double-saw buzz
+      const osc1   = ctx.createOscillator();
+      const osc2   = ctx.createOscillator();
+      const gain   = ctx.createGain();
       const filter = ctx.createBiquadFilter();
-      
       osc1.type = "sawtooth";
       osc2.type = "sawtooth";
       filter.type = "lowpass";
-      
-      osc1.frequency.setValueAtTime(130.81, now); // C3
-      osc2.frequency.setValueAtTime(138.59, now); // C#3
-      filter.frequency.setValueAtTime(450, now);
-      
-      gain.gain.setValueAtTime(0.06, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      
-      osc1.connect(filter);
-      osc2.connect(filter);
+      osc1.frequency.setValueAtTime(130.81, now);
+      osc2.frequency.setValueAtTime(138.59, now);
+      filter.frequency.setValueAtTime(500, now);
+      gain.gain.setValueAtTime(0.07, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.40);
+      osc1.connect(filter); osc2.connect(filter);
       filter.connect(gain);
       gain.connect(ctx.destination);
-      
-      osc1.start(now);
-      osc2.start(now);
-      osc1.stop(now + 0.4);
-      osc2.stop(now + 0.4);
+      osc1.start(now); osc2.start(now);
+      osc1.stop(now + 0.42); osc2.stop(now + 0.42);
       break;
     }
-    case "oof": {
-      // Classic quick jump/oof pitch scoop
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(120, now);
-      osc.frequency.exponentialRampToValueAtTime(320, now + 0.12);
-      
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-      
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc.start(now);
-      osc.stop(now + 0.14);
-      break;
-    }
+
     case "laser": {
-      // Rapid descending sweep
-      const osc = ctx.createOscillator();
+      // Retro descending zap
+      const osc  = ctx.createOscillator();
       const gain = ctx.createGain();
-      
       osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(800, now);
-      osc.frequency.exponentialRampToValueAtTime(100, now + 0.18);
-      
-      gain.gain.setValueAtTime(0.04, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-      
+      osc.frequency.setValueAtTime(900, now);
+      osc.frequency.exponentialRampToValueAtTime(80, now + 0.20);
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      
       osc.start(now);
-      osc.stop(now + 0.18);
+      osc.stop(now + 0.22);
       break;
     }
+
+    default:
+      console.warn("[Sound] Unknown soundId:", soundId);
   }
 };
 
+// ── Main entry point called by Chatlist on new message ───────────────────────
 export const playNotificationSound = () => {
-  try {
-    const selectedSound = (typeof window !== "undefined" && localStorage.getItem("notificationSoundSetting")) || "oof";
-    console.log("playNotificationSound playing selected sound setting:", selectedSound);
-    playSoundEffect(selectedSound);
-  } catch (err) {
-    console.error("Error in playNotificationSound:", err);
-  }
+  const soundId = (typeof window !== "undefined" &&
+    localStorage.getItem("notificationSoundSetting")) || "oof";
+  console.log("[Sound] playNotificationSound → soundId:", soundId);
+  // playSoundEffect is async but we fire-and-forget intentionally
+  playSoundEffect(soundId).catch((e) =>
+    console.warn("[Sound] playNotificationSound error:", e)
+  );
 };
