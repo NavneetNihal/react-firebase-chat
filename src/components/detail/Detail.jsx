@@ -4,6 +4,7 @@ import { account, client, databases, appwriteConfig } from "../../lib/appwrite";
 import useUserStore from "../../lib/userStore";
 import { useChatStore } from "../../lib/chatStore";
 import { toast } from "react-toastify";
+import ProfilePicViewer from "../profilePicViewer/ProfilePicViewer";
 
 const Detail = () => {
   const { currentUser, fetchUserInfo } = useUserStore();
@@ -14,6 +15,7 @@ const Detail = () => {
   const [sharedPhotosOpen, setSharedPhotosOpen] = useState(false);
   const [sharedFilesOpen, setSharedFilesOpen] = useState(false);
   const [chat, setChat] = useState(null);
+  const [showPicPreview, setShowPicPreview] = useState(false);
 
   useEffect(() => {
     if (!chatId) {
@@ -198,12 +200,18 @@ const Detail = () => {
   };
 
   return (
+    <>
     <div className='detail'>
       <div className="backButton" onClick={toggleDetail}>
         <img src="./arrowDown.png" alt="Back" />
       </div>
       <div className="user">
-        <img src={user?.avatar || "./avatar.png"} alt="" />
+        <img
+          src={user?.avatar || "./avatar.png"}
+          alt=""
+          className="detailAvatar"
+          onClick={() => setShowPicPreview(true)}
+        />
         <h2>{user?.username || "User"}</h2>
         <p>{user?.status || "Available"}</p>
       </div>
@@ -289,6 +297,15 @@ const Detail = () => {
         </div>
       </div>
     </div>
+
+      {showPicPreview && user && (
+        <ProfilePicViewer
+          src={user?.avatar || "./avatar.png"}
+          name={user?.username}
+          onClose={() => setShowPicPreview(false)}
+        />
+      )}
+    </>
   );
 };
 

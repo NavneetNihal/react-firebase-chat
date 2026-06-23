@@ -4,6 +4,7 @@ import { useChatStore } from "../../../lib/chatStore";
 import { databases, client, appwriteConfig } from "../../../lib/appwrite"; 
 import "./chatList.css";
 import AddUser from "./addUser/AddUser";
+import ProfilePicViewer from "../../profilePicViewer/ProfilePicViewer";
 
 import { initAndUnlockAudio, playNotificationSound } from "../../../lib/sound";
 
@@ -11,6 +12,7 @@ const ChatList = () => {
   const [chats, setChats] = useState([]);
   const [addMode, setAddMode] = useState(false);
   const [input, setInput] = useState("");
+  const [previewUser, setPreviewUser] = useState(null); // { avatar, username }
   const { currentUser } = useUserStore();
   const { chatId, changeChat, resetChat } = useChatStore();
 
@@ -334,6 +336,13 @@ const ChatList = () => {
                   : chat.user?.avatar || "./avatar.png"
               }
               alt=""
+              className="chatAvatar"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!isBlocked) {
+                  setPreviewUser({ avatar: chat.user?.avatar, username: chat.user?.username });
+                }
+              }}
             />
             <div className="texts">
               <span>
@@ -345,12 +354,20 @@ const ChatList = () => {
                 {chat.typing ? "💬 Typing..." : chat.lastMessage}
               </p>
             </div>
-            <button className="deleteBtn" onClick={(e) => handleDelete(e, chat.chatId, chat.receiverId)}>Delete</button>
+
           </div>
         );
       })}
       
       {addMode && <AddUser setAddMode={setAddMode} />}
+
+      {previewUser && (
+        <ProfilePicViewer
+          src={previewUser.avatar || "./avatar.png"}
+          name={previewUser.username}
+          onClose={() => setPreviewUser(null)}
+        />
+      )}
     </div>
   );
 };
