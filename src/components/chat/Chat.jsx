@@ -6,50 +6,34 @@ import { useChatStore } from "../../lib/chatStore";
 import useUserStore from "../../lib/userStore";
 import upload from "../../lib/upload";
 
-// ── Extracted components ──────────────────────────────────────────────────────
-import CameraModal    from "./CameraModal";      // webcam capture modal
-import WaveformCanvas from "./WaveformCanvas";   // live mic waveform bars
+// ── Components ────────────────────────────────────────────────────────────────
+import CameraModal  from "./CameraModal";    // webcam capture modal
+import VoiceNoteBar from "./VoiceNoteBar";   // recording + preview bars
 
-// ── Extracted hooks ───────────────────────────────────────────────────────────
-import useVoiceNote      from "./useVoiceNote";       // all voice recording logic
-import useCallInitiator  from "./useCallInitiator";   // clicking 📞/📹 buttons
+// ── Custom hooks ──────────────────────────────────────────────────────────────
+import useVoiceNote     from "./useVoiceNote";      // mic recording logic
+import useCallInitiator from "./useCallInitiator";  // 📞/📹 button logic
+import useTypingStatus  from "./useTypingStatus";   // typing indicator logic
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const formatTimeAgo = (timestamp) => {
-  if (!timestamp) return "";
-  const date = new Date(timestamp);
-  const now  = new Date();
-  const diffInSeconds = Math.floor((now - date) / 1000);
-  if (diffInSeconds < 60) return "just now";
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours}h ago`;
-  return `${Math.floor(diffInHours / 24)}d ago`;
-};
-
-const formatDuration = (seconds) => {
-  const m = Math.floor(seconds / 60).toString().padStart(2, "0");
-  const s = (seconds % 60).toString().padStart(2, "0");
-  return `${m}:${s}`;
-};
+import { formatTimeAgo } from "./chatHelpers"; // timestamp → "5m ago"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Chat — main chat window component
+// Chat — what belongs here:
+//   ✅ Fetching + subscribing to chat messages (core job)
+//   ✅ Sending text messages and images (core job)
+//   ✅ Rendering message list, input bar, emoji picker (core job)
 //
-// Responsibilities (what lives HERE):
-//   • Fetching + subscribing to chat messages
-//   • Typing indicator (show/hide, update Appwrite)
-//   • Sending text messages and images
-//   • Rendering the message list, input bar, emoji picker
-//
-// Responsibilities (what lives ELSEWHERE):
-//   • Voice recording → useVoiceNote.js
-//   • Call initiation → useCallInitiator.js
-//   • Camera capture  → CameraModal.jsx
-//   • Waveform bars   → WaveformCanvas.jsx
-//   • WebRTC logic    → CallOverlay.jsx
-//   • Call state      → callStore.js
+// What lives ELSEWHERE:
+//   📁 useTypingStatus.js  — typing indicator (incoming + outgoing)
+//   📁 useVoiceNote.js     — voice recording, preview, send
+//   📁 useCallInitiator.js — clicking 📞/📹 → Appwrite → CallOverlay
+//   📁 VoiceNoteBar.jsx    — recording UI bars
+//   📁 CameraModal.jsx     — webcam capture
+//   📁 WaveformCanvas.jsx  — live mic frequency bars
+//   📁 CallOverlay.jsx     — WebRTC (in /call folder)
+//   📁 callStore.js        — call state machine
+//   📁 chatHelpers.js      — pure formatting utils
 // ─────────────────────────────────────────────────────────────────────────────
 const Chat = () => {
   const [chat,       setChat]       = useState();
@@ -58,38 +42,37 @@ const Chat = () => {
   const [img,        setImg]        = useState({ file: null, url: "" });
   const [showCamera, setShowCamera] = useState(false);
 
-  const { currentUser }                                                      = useUserStore();
+  const { currentUser } = useUserStore();
   const { chatId, user, isCurrentUserBlocked, isReceiverBlocked, toggleDetail, resetChat } = useChatStore();
 
-  // ── Typing indicator ───────────────────────────────────────────────────────
-  const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
-  const typingTimeoutRef = useRef(null);
-  const isTypingRef      = useRef(false);
-  const activeChatRef    = useRef({ chatId, userId: user?.$id || user?.id });
+  // ── Feature hooks (all logic lives in their own files) ────────────────────
+  const voiceNote              = useVoiceNote();
+  const { handleCall }         = useCallInitiator();
+  const { isOtherUserTyping,
+          handleInputChange,
+          clearTyping }        = useTypingStatus();
 
-  // ── Pull in extracted feature hooks ───────────────────────────────────────
-  const voiceNote = useVoiceNote();          // isRecording, audioBlob, handleMicClick, etc.
-  const { handleCall } = useCallInitiator(); // handleCall("audio") / handleCall("video")
-
-  const endRef = useRef(null);
+  const endRef    = useRef(null);
   const isBlocked = isCurrentUserBlocked || isReceiverBlocked;
 
-  // ── Scroll to bottom when messages change ──────────────────────────────────
+  // ── Scroll to latest message ───────────────────────────────────────────────
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat?.messages]);
 
-  // ── Fetch chat + subscribe to real-time message updates ───────────────────
+  // ── Fetch messages + subscribe to real-time updates ───────────────────────
   useEffect(() => {
     if (!chatId) return;
 
     const fetchChat = async () => {
       try {
-        const doc = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.chatsCollectionId, chatId);
+        const doc = await databases.getDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.chatsCollectionId,
+          chatId
+        );
         setChat(doc);
-      } catch (err) {
-        console.log("Error loading chat:", err);
-      }
+      } catch (err) { console.log("Error loading chat:", err); }
     };
     fetchChat();
 
@@ -107,103 +90,8 @@ const Chat = () => {
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => {
-    return () => {
-      voiceNote.cleanup();
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    };
+    return () => voiceNote.cleanup();
   }, []);
-
-  // ── Listen to other user's typing status in OUR userchats doc ─────────────
-  useEffect(() => {
-    const currentUserId = currentUser?.$id || currentUser?.id;
-    if (!currentUserId || !chatId) return;
-
-    const loadInitialTyping = async () => {
-      try {
-        const doc = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, currentUserId);
-        if (doc?.chats) {
-          const parsed = doc.chats.map((c) => { try { return typeof c === "string" ? JSON.parse(c) : c; } catch { return null; } }).filter(Boolean);
-          const activeChat = parsed.find((c) => c.chatId === chatId);
-          setIsOtherUserTyping(!!activeChat?.typing);
-        }
-      } catch {}
-    };
-    loadInitialTyping();
-
-    const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.userchatsCollectionId}.documents.${currentUserId}`;
-    const unsub = client.subscribe(channel, (res) => {
-      const doc = res.payload;
-      if (doc?.chats) {
-        const parsed = doc.chats.map((c) => { try { return typeof c === "string" ? JSON.parse(c) : c; } catch { return null; } }).filter(Boolean);
-        const activeChat = parsed.find((c) => c.chatId === chatId);
-        setIsOtherUserTyping(!!activeChat?.typing);
-      }
-    });
-    return () => unsub();
-  }, [chatId, currentUser]);
-
-  // ── Clear our typing flag when switching chats ─────────────────────────────
-  useEffect(() => {
-    const prev = activeChatRef.current;
-    return () => {
-      if (prev.chatId && prev.userId && isTypingRef.current) {
-        const prevChatId = prev.chatId;
-        const prevUserId = prev.userId;
-        (async () => {
-          try {
-            const doc = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, prevUserId);
-            if (doc?.chats) {
-              const parsed = doc.chats.map((c) => { try { return typeof c === "string" ? JSON.parse(c) : c; } catch { return null; } }).filter(Boolean);
-              const idx = parsed.findIndex((c) => c.chatId === prevChatId);
-              if (idx !== -1 && parsed[idx].typing) {
-                parsed[idx].typing = false;
-                await databases.updateDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, prevUserId, {
-                  chats: parsed.map((c) => JSON.stringify(c)),
-                });
-              }
-            }
-          } catch (e) { console.warn("Failed to reset typing on chat swap:", e); }
-        })();
-      }
-    };
-  }, [chatId, user]);
-
-  useEffect(() => {
-    activeChatRef.current = { chatId, userId: user?.$id || user?.id };
-    if (typingTimeoutRef.current) { clearTimeout(typingTimeoutRef.current); typingTimeoutRef.current = null; }
-    isTypingRef.current = false;
-  }, [chatId, user]);
-
-  // ── Update typing status in other user's userchats doc ────────────────────
-  const updateTypingStatus = async (typingVal) => {
-    const otherUserId   = user?.$id || user?.id;
-    const currentUserId = currentUser?.$id || currentUser?.id;
-    if (!otherUserId || !chatId || !currentUserId) return;
-    try {
-      const doc = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, otherUserId);
-      if (doc?.chats) {
-        const parsed = doc.chats.map((c) => { try { return typeof c === "string" ? JSON.parse(c) : c; } catch { return null; } }).filter(Boolean);
-        const idx = parsed.findIndex((c) => c.chatId === chatId);
-        if (idx !== -1) {
-          if (parsed[idx].typing === typingVal) return; // no change needed
-          parsed[idx].typing = typingVal;
-          await databases.updateDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, otherUserId, {
-            chats: parsed.map((c) => JSON.stringify(c)),
-          });
-        }
-      }
-    } catch (err) { console.warn("Error updating typing status:", err.message); }
-  };
-
-  const handleInputChange = (e) => {
-    setText(e.target.value);
-    if (!isTypingRef.current) { isTypingRef.current = true; updateTypingStatus(true); }
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      isTypingRef.current = false;
-      updateTypingStatus(false);
-    }, 1800);
-  };
 
   // ── Send text / image ──────────────────────────────────────────────────────
   const handleSend = async (e) => {
@@ -211,15 +99,15 @@ const Chat = () => {
     if (text === "" && !img.file) return;
     setOpen(false);
 
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    isTypingRef.current = false;
-    updateTypingStatus(false);
+    // Kill typing indicator immediately on send
+    clearTyping();
 
     const messageText   = text;
     const imgFile       = img.file;
     const currentUserId = currentUser?.$id || currentUser?.id;
     const otherUserId   = user?.$id || user?.id;
 
+    // Clear inputs immediately for snappy UI
     setText(""); setImg({ file: null, url: "" });
 
     try {
@@ -227,22 +115,30 @@ const Chat = () => {
       if (imgFile) imgUrl = await upload(imgFile);
 
       const chatDoc    = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.chatsCollectionId, chatId);
-      const newMessage = JSON.stringify({ senderId: currentUserId, text: messageText, createdAt: Date.now(), ...(imgUrl && { img: imgUrl }) });
+      const newMessage = JSON.stringify({
+        senderId:  currentUserId,
+        text:      messageText,
+        createdAt: Date.now(),
+        ...(imgUrl && { img: imgUrl }),
+      });
       await databases.updateDocument(appwriteConfig.databaseId, appwriteConfig.chatsCollectionId, chatId, {
         messages: [...(chatDoc.messages || []), newMessage],
       });
 
+      // Update both users' chat list metadata
       for (const id of [currentUserId, otherUserId]) {
         try {
           const doc = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, id);
           if (doc?.chats) {
-            const parsed = doc.chats.map((c) => { try { return typeof c === "string" ? JSON.parse(c) : c; } catch { return null; } }).filter(Boolean);
+            const parsed = doc.chats
+              .map((c) => { try { return typeof c === "string" ? JSON.parse(c) : c; } catch { return null; } })
+              .filter(Boolean);
             const idx = parsed.findIndex((c) => c.chatId === chatId);
             if (idx !== -1) {
               parsed[idx].lastMessage = messageText || "[Image]";
               parsed[idx].isSeen      = id === currentUserId;
               parsed[idx].updatedAt   = Date.now();
-              parsed[idx].typing      = false; // prevent stuck typing indicator
+              parsed[idx].typing      = false; // force-clear to prevent stuck indicator
               await databases.updateDocument(appwriteConfig.databaseId, appwriteConfig.userchatsCollectionId, id, {
                 chats: parsed.map((c) => JSON.stringify(c)),
               });
@@ -253,19 +149,20 @@ const Chat = () => {
     } catch (err) { console.log("Error sending message:", err); }
   };
 
-  const handleEmoji  = (e) => setText((prev) => prev + e.emoji);
-  const handleImg    = (e) => { if (e.target.files[0]) setImg({ file: e.target.files[0], url: URL.createObjectURL(e.target.files[0]) }); };
+  const handleEmoji         = (e) => setText((prev) => prev + e.emoji);
+  const handleImg           = (e) => { if (e.target.files[0]) setImg({ file: e.target.files[0], url: URL.createObjectURL(e.target.files[0]) }); };
   const handleCameraCapture = (file, previewUrl) => setImg({ file, url: previewUrl });
 
-  // ─── RENDER ────────────────────────────────────────────────────────────────
+  // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div className="chat">
-      {/* Camera modal — rendered only when open */}
+
+      {/* Camera modal */}
       {showCamera && (
         <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />
       )}
 
-      {/* ── Top bar: user info + call buttons ── */}
+      {/* ── Top bar ── */}
       <div className="top">
         <div className="backButton" onClick={resetChat}>
           <img src="./arrowDown.png" alt="Back" />
@@ -274,13 +171,14 @@ const Chat = () => {
           <img src={user?.avatar || "./avatar.png"} alt="" />
           <div className="texts">
             <span>{user?.username || "User"}</span>
+            {/* isOtherUserTyping comes from useTypingStatus */}
             <p style={{ color: isOtherUserTyping ? "#8bb2ff" : "#e0e0e0", fontWeight: isOtherUserTyping ? "bold" : "normal" }}>
               {isOtherUserTyping ? "💬 typing..." : (user?.status || "Available")}
             </p>
           </div>
         </div>
         <div className="icons">
-          {/* These call useCallInitiator → handleCall → Appwrite doc → callStore → CallOverlay */}
+          {/* handleCall comes from useCallInitiator */}
           <img src="./phone.png" alt="Voice call"  title="Start voice call"  style={{ cursor: "pointer" }} onClick={() => handleCall("audio")} />
           <img src="./video.png" alt="Video call"  title="Start video call"  style={{ cursor: "pointer" }} onClick={() => handleCall("video")} />
           <img src="./info.png"  alt="Info"                                  style={{ cursor: "pointer" }} onClick={toggleDetail} />
@@ -306,6 +204,7 @@ const Chat = () => {
                   </div>
                 )}
                 {message.text  && <p>{message.text}</p>}
+                {/* formatTimeAgo lives in chatHelpers.js */}
                 <span>{formatTimeAgo(message.createdAt)}</span>
               </div>
             </div>
@@ -326,28 +225,8 @@ const Chat = () => {
         <div ref={endRef} />
       </div>
 
-      {/* ── Active recording bar (from useVoiceNote) ── */}
-      {voiceNote.isRecording && (
-        <div className="recordingBar">
-          <button className="voiceCancelBtn" onClick={voiceNote.cancelRecording} title="Cancel">✕</button>
-          <span className="recDot" />
-          <span className="recTimer">{formatDuration(voiceNote.recordingDuration)}</span>
-          <WaveformCanvas analyserNode={voiceNote.analyserNode} />
-          <button className="voiceStopBtn" onClick={() => voiceNote.handleMicClick()} title="Stop">⬛</button>
-        </div>
-      )}
-
-      {/* ── Preview bar after stopping (from useVoiceNote) ── */}
-      {voiceNote.audioBlob && !voiceNote.isRecording && (
-        <div className="voicePreviewBar">
-          <button className="voiceCancelBtn" onClick={voiceNote.cancelRecording} title="Discard">✕</button>
-          <div className="voicePreviewInner">
-            <img src="./mic.png" alt="" className="micIcon" />
-            <audio controls src={voiceNote.audioPreviewUrl} className="previewAudio" />
-          </div>
-          <button className="voiceSendBtn" onClick={voiceNote.sendVoiceNote}>Send</button>
-        </div>
-      )}
+      {/* ── Voice recording / preview bars (from VoiceNoteBar + useVoiceNote) ── */}
+      <VoiceNoteBar {...voiceNote} />
 
       {/* ── Input bar ── */}
       <form className="bottom" onSubmit={handleSend}>
@@ -365,7 +244,7 @@ const Chat = () => {
             onClick={() => !isBlocked && setShowCamera(true)}
           />
 
-          {/* Mic — glows red when recording */}
+          {/* Mic glows red when recording */}
           <img
             src="./mic.png"
             alt="Record voice note"
@@ -383,7 +262,7 @@ const Chat = () => {
           type="text"
           placeholder={isBlocked ? "You cannot send a message" : "Type a message..."}
           value={text}
-          onChange={handleInputChange}
+          onChange={(e) => handleInputChange(e, setText)}
           disabled={isBlocked}
         />
 
